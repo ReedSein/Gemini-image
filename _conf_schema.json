@@ -58,6 +58,11 @@
                 "type": "text",
                 "default": "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...",
                 "hint": "可用变量: {mode}(文/图生图), {model}(模型名), {cost}(消耗积分)"
+            },
+            "menu_start": {
+                "description": "菜单渲染时发送提示",
+                "type": "bool",
+                "default": true
             }
         }
     },
@@ -186,3 +191,5 @@
         }
     }
 }
+
+
