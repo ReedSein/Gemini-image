@@ -32,7 +32,9 @@ class ImageWorkflow:
         
     async def _download_image(self, url: str) -> bytes | None:
         try:
-            async with self.session.get(url, proxy=self.proxy_url) as resp:
+            # 如果 proxy_url 为空，则不使用代理
+            proxy = self.proxy_url if self.proxy_url else None
+            async with self.session.get(url, proxy=proxy) as resp:
                 resp.raise_for_status()
                 return await resp.read()
         except Exception as e:
@@ -89,7 +91,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "2.7.0",
+    "2.8.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -99,7 +101,9 @@ class GeminiDrawerPlugin(Star):
         self.plugin_data_dir = StarTools.get_data_dir("astrbot_plugin_gemini_drawer")
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         
-        self.proxy_url = self.conf.get("proxy_url", "http://127.0.0.1:23344")
+        # === 核心修改：移除默认代理 ===
+        # 如果配置中未填写，则默认为空字符串，不启用代理
+        self.proxy_url = self.conf.get("proxy_url", "")
         self.admin_id = self.conf.get("admin_id", "")
         
         # --- 经济系统配置 ---
@@ -109,7 +113,7 @@ class GeminiDrawerPlugin(Star):
         self.user_points_data = {}
         self._load_points_data()
 
-        # --- 配额配置 (新增：从配置读取频率限制) ---
+        # --- 配额配置 ---
         quota_conf = self.conf.get("quota", {})
         rate_limit_conf = self.conf.get("rate_limits", {})
         
@@ -136,19 +140,16 @@ class GeminiDrawerPlugin(Star):
             "pro": "gemini-3-pro-image-preview"
         }
 
-        # --- 动态速率限制 (RPM) ---
         flash_rpm = rate_limit_conf.get("flash_rpm", 3)
         pro_cooldown = rate_limit_conf.get("pro_cooldown", 90)
         
         self.rpm_limits = {
             "flash": flash_rpm,
-            # 将冷却时间转换为 RPM。例如 90秒一次 -> RPM = 60/90 = 0.66
             "pro": 60.0 / max(1, pro_cooldown), 
         }
         self.default_rpm = 5
         self.usage_history = defaultdict(lambda: defaultdict(deque))
         
-        # --- 预设加载 ---
         self.presets = {}
         style_presets = self.conf.get("style_presets", [])
         if style_presets:
@@ -163,11 +164,18 @@ class GeminiDrawerPlugin(Star):
 
 
     async def initialize(self):
+        # 传入可能为空的代理地址
         self.iwf = ImageWorkflow(self.proxy_url)
         
+        # === 核心修改：只有在配置了代理时才设置环境变量 ===
         if self.proxy_url:
+            logger.info(f"检测到代理配置: {self.proxy_url}，正在应用...")
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
+        else:
+            # 如果之前设置过（例如热重载），尝试清除，避免残留
+            os.environ.pop("http_proxy", None)
+            os.environ.pop("https_proxy", None)
             
         final_auth_path = None
         if self.auth_json_path and Path(self.auth_json_path).is_file():
@@ -223,7 +231,6 @@ class GeminiDrawerPlugin(Star):
         self._save_points_data()
 
     def _deduct_points(self, user_id: str, amount: int) -> bool:
-        """扣除积分，返回是否成功 (余额是否足够)"""
         uid = str(user_id)
         if self.admin_id and uid == self.admin_id: return True
         if not self.enable_economy: return True
@@ -236,7 +243,6 @@ class GeminiDrawerPlugin(Star):
         return False
     
     def _check_balance(self, user_id: str, amount: int) -> bool:
-        """仅检查余额，不扣费"""
         if self.admin_id and str(user_id) == self.admin_id: return True
         if not self.enable_economy: return True
         return self._get_points(user_id) >= amount
@@ -255,11 +261,9 @@ class GeminiDrawerPlugin(Star):
                 break
         
         if rpm < 1.0:
-            # RPM < 1，说明是长间隔模式。窗口大小 = 60 / RPM
             window_size = 60.0 / rpm
             limit = 1
         else:
-            # RPM >= 1，标准每分钟 N 次模式
             window_size = 60.0
             limit = int(rpm)
         
