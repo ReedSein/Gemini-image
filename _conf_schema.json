@@ -62,8 +62,7 @@
             "menu_start": {
                 "description": "菜单渲染时发送提示",
                 "type": "bool",
-                "default": true,
-                "hint": "开启后，使用 /subrosa_ima 时会回复 '正在绘制 Chromatics 卷轴...'"
+                "default": true
             }
         }
     },
@@ -175,7 +174,7 @@
     "style_presets": {
         "description": "【风格】预设列表",
         "type": "list",
-        "hint": "格式：预设名:提示词内容。使用 /imago <预设名> 调用。",
+        "hint": "格式：预设名:提示词内容。支持使用 \\n 换行。使用 /imago <预设名> 调用。",
         "default": [
             "手办化:Your task is to create a photorealistic, masterpiece-quality image of a 1/7 scale commercialized figurine based on the user's character. The final image must be in a realistic style and environment. The figurine's face is the most critical element. It must be a perfect, high-fidelity 3D translation of the character. Scene Composition: Place the figure on a computer desk with a simple circular transparent acrylic base.",
             "Q版化:((chibi style)), ((super-deformed)), ((head-to-body ratio 1:2)), ((huge head, tiny body)), ((smooth rounded limbs)), ((soft balloon-like hands and feet)), ((plump cheeks)), ((childlike big eyes)), ((simplified facial features)), ((soft pastel color palette)), ((gentle ambient lighting)).",
