@@ -62,7 +62,7 @@
             "menu_start": {
                 "description": "菜单渲染时发送提示",
                 "type": "bool",
-                "default": false
+                "default": true
             }
         }
     },
