@@ -25,219 +25,6 @@ from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-# --- Chromatics 古典风格模板 (离线版) ---
-# 移除了 googleapis 的字体引用，防止国内网络超时
-CHROMATICS_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-    body {
-        margin: 0;
-        padding: 60px;
-        background-color: #f0e6d2;
-        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
-        /* 使用系统自带衬线字体，兼容性最好 */
-        font-family: 'Georgia', 'Times New Roman', 'Songti SC', 'SimSun', serif;
-        color: #2c241b;
-        width: 800px;
-        box-sizing: border-box;
-    }
-
-    .frame {
-        border: 4px double #5c4b37;
-        padding: 40px;
-        background-color: rgba(255, 253, 245, 0.9);
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        position: relative;
-    }
-
-    .frame::before {
-        content: "";
-        position: absolute;
-        top: 5px; left: 5px; right: 5px; bottom: 5px;
-        border: 1px solid #8c7b66;
-        pointer-events: none;
-    }
-
-    h1 {
-        font-size: 56px;
-        text-align: center;
-        color: #8b0000;
-        margin: 0 0 10px 0;
-        text-transform: uppercase;
-        letter-spacing: 8px;
-        text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
-        font-weight: bold;
-    }
-
-    .subtitle {
-        text-align: center;
-        font-style: italic;
-        color: #5c4b37;
-        font-size: 16px;
-        margin-bottom: 40px;
-        border-bottom: 1px solid #5c4b37;
-        padding-bottom: 20px;
-        display: inline-block;
-        width: 100%;
-    }
-
-    h2 {
-        font-size: 24px;
-        color: #2c241b;
-        border-bottom: 2px solid #e0d0b8;
-        padding-bottom: 8px;
-        margin-top: 35px;
-        margin-bottom: 15px;
-        display: flex;
-        align-items: center;
-        font-weight: bold;
-    }
-
-    h2::before {
-        content: "❖";
-        margin-right: 10px;
-        color: #8b0000;
-        font-size: 18px;
-    }
-
-    ul {
-        list-style: none;
-        padding: 0;
-    }
-
-    li {
-        margin-bottom: 10px;
-        font-size: 17px;
-        line-height: 1.5;
-        display: flex;
-        align-items: baseline;
-    }
-
-    li strong {
-        color: #8b0000;
-        font-weight: 700;
-        margin-right: 8px;
-        min-width: 120px;
-    }
-
-    .info-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-    }
-
-    .info-box {
-        background: #f4efe6;
-        padding: 15px;
-        border-radius: 2px;
-        border: 1px solid #dcd0c0;
-    }
-
-    .info-title {
-        font-weight: bold;
-        color: #5c4b37;
-        margin-bottom: 5px;
-        font-size: 14px;
-    }
-
-    .info-value {
-        font-size: 18px;
-        color: #2c241b;
-        font-weight: bold;
-    }
-
-    .preset-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .preset-tag {
-        background: #fff;
-        border: 1px solid #8b0000;
-        color: #8b0000;
-        padding: 6px 12px;
-        font-size: 14px;
-        border-radius: 2px;
-        text-transform: uppercase;
-        box-shadow: 2px 2px 0px rgba(139, 0, 0, 0.1);
-        font-weight: bold;
-    }
-
-    .footer {
-        margin-top: 50px;
-        text-align: center;
-        font-size: 12px;
-        color: #8c7b66;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-</style>
-</head>
-<body>
-    <div class="frame">
-        <h1>Chromatics</h1>
-        <div class="subtitle">The Artificer's Guide to Digital Manifestation</div>
-
-        <!-- 1. 指令帮助 -->
-        <h2>Ordinances (指令)</h2>
-        <ul>
-            <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图。支持中文描述或英文提示词。</span></li>
-            <li><strong>/imago &lt;Preset&gt;</strong> <span>使用下方列出的预设风格进行创作。</span></li>
-            <li><strong>/imago pro ...</strong> <span>强制使用高阶模型 (Pro) 进行生成。</span></li>
-            {% if economy.enabled %}
-            <li><strong>/签到</strong> <span>每日祈祷，获取灵感点数 (Credits)。</span></li>
-            <li><strong>/积分</strong> <span>查询当前剩余的灵感点数。</span></li>
-            <li><strong>/兑换码 &lt;Code&gt;</strong> <span>兑换灵感点数。</span></li>
-            {% endif %}
-        </ul>
-
-        <!-- 2. 经济与限制 -->
-        <h2>Limitations & Specie (法则)</h2>
-        <div class="info-grid">
-            <div class="info-box">
-                <div class="info-title">Flash Model</div>
-                <div class="info-value">
-                    {% if economy.enabled %}Cost: {{ economy.cost_flash }}{% else %}Free{% endif %} 
-                    <span style="font-size:14px; color:#666">| Daily: {{ quota.flash }}</span>
-                </div>
-                <div style="font-size:13px; margin-top:4px; color:#888">Rate: {{ rate.flash_rpm }} requests/min</div>
-            </div>
-            <div class="info-box">
-                <div class="info-title">Pro Model</div>
-                <div class="info-value">
-                    {% if economy.enabled %}Cost: {{ economy.cost_pro }}{% else %}Free{% endif %}
-                    <span style="font-size:14px; color:#666">| Daily: {{ quota.pro }}</span>
-                </div>
-                <div style="font-size:13px; margin-top:4px; color:#888">Cooldown: {{ rate.pro_cooldown }} seconds</div>
-            </div>
-            {% if economy.enabled %}
-            <div class="info-box" style="grid-column: span 2;">
-                <div class="info-title">Daily Blessing (Check-in)</div>
-                <div class="info-value">{{ economy.checkin_min }} - {{ economy.checkin_max }} Credits</div>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- 3. 预设列表 -->
-        <h2>Manifestations (预设)</h2>
-        <div class="preset-container">
-            {% for name in presets %}
-            <span class="preset-tag">{{ name }}</span>
-            {% endfor %}
-        </div>
-
-        <div class="footer">
-            Gemini Drawer Plugin v3.3.1 | Sub Rosa Imago
-        </div>
-    </div>
-</body>
-</html>
-"""
-
 class ImageWorkflow:
     def __init__(self, proxy_url: str = None):
         self.proxy_url = proxy_url
@@ -302,7 +89,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.3.1",
+    "3.4.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -554,30 +341,6 @@ class GeminiDrawerPlugin(Star):
     #        指令处理
     # ==========================
 
-    @filter.command("subrosa_imago")
-    async def subrosa_imago(self, event: AstrMessageEvent):
-        """生成古典风格的帮助菜单 (Chromatics)"""
-        logger.info("Rendering Chromatics menu...")
-        
-        # === 无论配置如何，这里建议强制反馈，防止用户以为卡死 ===
-        # 如果你希望完全遵守配置，请去掉 or True (但强烈不建议)
-        if self.feedback_conf.get("menu_start", True):
-            yield event.plain_result("📜 正在绘制 Chromatics 卷轴，请稍候...")
-        
-        render_data = {
-            "economy": self.eco_conf,
-            "quota": self.daily_limits,
-            "rate": self.rate_limit_conf,
-            "presets": list(self.presets.keys())
-        }
-        
-        try:
-            img_url = await self.html_render(CHROMATICS_TEMPLATE, render_data)
-            yield event.image_result(img_url)
-        except Exception as e:
-            logger.error(f"Chromatics 渲染失败: {e}")
-            yield event.plain_result(f"渲染失败: {e}")
-
     @filter.command("签到")
     async def checkin(self, event: AstrMessageEvent):
         """每日签到领取积分"""
@@ -664,10 +427,15 @@ class GeminiDrawerPlugin(Star):
         
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
+        # === 核心修改: list 指令回退为纯文本 ===
         if raw_content == "list":
-            # 修复: 使用 async for 代理 yield
-            async for item in self.subrosa_imago(event):
-                yield item
+            msg = ["📜 **可用预设列表 (Manifestations)**", "="*20]
+            for name, prompt in self.presets.items():
+                msg.append(f"🔸 **{name}**")
+            
+            msg.append("="*20)
+            msg.append("💡 使用方法: /imago <预设名> <描述>")
+            yield event.plain_result("\n".join(msg))
             return
 
         parts = raw_content.split()
