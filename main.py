@@ -25,209 +25,177 @@ from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-# --- Chromatics 古典风格模板 (Retina高清版) ---
+# --- Chromatics 古典风格模板 (v3.5.0 稳健渲染版) ---
+# 吸取了 TRPG 插件的 fit-content 布局经验，确保截图不崩坏
 CHROMATICS_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- 强制 2倍缩放，实现 HiDPI 高清渲染 -->
-<meta name="viewport" content="width=device-width, initial-scale=2">
 <style>
     body {
         margin: 0;
-        padding: 80px; /* 增加内边距 */
-        background-color: #f0e6d2;
-        /* 优化 SVG 噪点，使其在高分屏下更细腻 */
-        background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noise)' opacity='0.12'/%3E%3C/svg%3E");
+        padding: 60px;
+        background-color: transparent; /* 背景透明，由容器决定颜色 */
         font-family: 'Georgia', 'Times New Roman', 'Songti SC', 'SimSun', serif;
-        color: #2c241b;
-        width: 1000px; /* 增加宽度以适应高清 */
-        box-sizing: border-box;
-        /* 字体抗锯齿 */
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        text-align: center; /* 全局居中 */
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        /* 核心黑科技：让 Body 宽度自适应内容，配合 full_page=True 实现完美截图 */
+        width: fit-content;
+        min-width: 100%;
     }
 
     .frame {
-        border: 6px double #5c4b37;
-        padding: 60px;
-        background-color: rgba(255, 253, 245, 0.92);
-        box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+        /* 羊皮纸质感背景 */
+        background-color: #f0e6d2;
+        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
+        
+        border: 8px double #5c4b37;
+        padding: 50px;
+        box-shadow: 20px 20px 50px rgba(0,0,0,0.3); /* 更深邃的阴影 */
+        width: 900px; /* 固定宽度，保证排版一致 */
+        color: #2c241b;
         position: relative;
-        display: flex;
-        flex-direction: column;
-        align-items: center; /* 容器内元素居中 */
+        box-sizing: border-box;
+        border-radius: 4px;
     }
 
     .frame::before {
         content: "";
         position: absolute;
-        top: 8px; left: 8px; right: 8px; bottom: 8px;
+        top: 10px; left: 10px; right: 10px; bottom: 10px;
         border: 2px solid #8c7b66;
         pointer-events: none;
     }
 
     h1 {
-        font-size: 72px; /* 放大字号 */
+        font-size: 64px;
+        text-align: center;
         color: #8b0000;
-        margin: 0 0 15px 0;
+        margin: 0 0 10px 0;
         text-transform: uppercase;
-        letter-spacing: 12px;
-        text-shadow: 2px 2px 0px rgba(0,0,0,0.05);
+        letter-spacing: 10px;
+        text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
         font-weight: bold;
     }
 
     .subtitle {
+        text-align: center;
         font-style: italic;
         color: #5c4b37;
         font-size: 20px;
-        margin-bottom: 50px;
+        margin-bottom: 40px;
         border-bottom: 2px solid #5c4b37;
-        padding-bottom: 25px;
-        display: inline-block;
-        width: 80%; /* 分隔线宽度 */
+        padding-bottom: 20px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 80%;
     }
 
     h2 {
-        font-size: 32px;
+        font-size: 28px;
         color: #2c241b;
         border-bottom: 3px solid #e0d0b8;
-        padding-bottom: 12px;
+        padding-bottom: 10px;
         margin-top: 40px;
-        margin-bottom: 25px;
-        display: inline-flex; /* 改为行内弹性，配合父级居中 */
+        margin-bottom: 20px;
+        display: flex;
         align-items: center;
-        justify-content: center;
         font-weight: bold;
-        width: 60%;
     }
 
     h2::before {
         content: "❖";
         margin-right: 15px;
         color: #8b0000;
-        font-size: 24px;
-    }
-    
-    h2::after {
-        content: "❖";
-        margin-left: 15px;
-        color: #8b0000;
-        font-size: 24px;
+        font-size: 22px;
     }
 
     ul {
         list-style: none;
         padding: 0;
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
     }
 
     li {
-        margin-bottom: 18px;
-        font-size: 22px; /* 放大正文 */
+        margin-bottom: 15px;
+        font-size: 20px;
         line-height: 1.6;
         display: flex;
-        flex-direction: column; /* 移动端友好，上下排列 */
-        align-items: center;
-        text-align: center;
-        width: 90%;
-        border-bottom: 1px dashed rgba(140, 123, 102, 0.3);
-        padding-bottom: 10px;
-    }
-    
-    li:last-child {
-        border-bottom: none;
+        align-items: baseline;
+        border-bottom: 1px dashed rgba(92, 75, 55, 0.2);
+        padding-bottom: 8px;
     }
 
     li strong {
         color: #8b0000;
         font-weight: 700;
-        margin-bottom: 4px;
-        font-size: 24px;
-        background: rgba(240, 230, 210, 0.5);
-        padding: 2px 10px;
-        border-radius: 4px;
-    }
-    
-    li span {
-        color: #4a3b2a;
+        margin-right: 15px;
+        min-width: 200px; /* 确保指令列对齐 */
+        font-family: 'Courier New', monospace; /* 等宽字体显示指令 */
     }
 
     .info-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 25px;
-        width: 90%;
+        gap: 20px;
     }
 
     .info-box {
-        background: #f8f4eb;
-        padding: 25px;
+        background: rgba(255, 255, 255, 0.5);
+        padding: 20px;
         border-radius: 4px;
-        border: 2px solid #dcd0c0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        border: 1px solid #dcd0c0;
     }
 
     .info-title {
         font-weight: bold;
         color: #5c4b37;
-        margin-bottom: 10px;
-        font-size: 18px;
+        margin-bottom: 8px;
+        font-size: 16px;
         text-transform: uppercase;
-        letter-spacing: 1px;
     }
 
     .info-value {
-        font-size: 28px;
+        font-size: 24px;
         color: #2c241b;
         font-weight: bold;
     }
     
     .info-sub {
-        font-size: 16px; 
-        margin-top: 8px; 
-        color: #888;
-        font-family: monospace; /* 等宽字体显示数字更整齐 */
+        font-size: 14px;
+        color: #666;
+        margin-top: 5px;
     }
 
     .preset-container {
         display: flex;
         flex-wrap: wrap;
-        gap: 15px;
-        justify-content: center; /* 预设标签居中对齐 */
-        width: 90%;
+        gap: 12px;
     }
 
     .preset-tag {
         background: #fff;
         border: 2px solid #8b0000;
         color: #8b0000;
-        padding: 10px 20px;
-        font-size: 18px;
+        padding: 8px 16px;
+        font-size: 16px;
         border-radius: 4px;
         text-transform: uppercase;
-        box-shadow: 4px 4px 0px rgba(139, 0, 0, 0.15);
         font-weight: bold;
-        transition: all 0.3s ease;
+        box-shadow: 3px 3px 0px rgba(139, 0, 0, 0.15);
     }
 
     .footer {
-        margin-top: 80px;
+        margin-top: 60px;
         text-align: center;
-        font-size: 16px;
+        font-size: 14px;
         color: #8c7b66;
         text-transform: uppercase;
-        letter-spacing: 4px;
+        letter-spacing: 3px;
         border-top: 1px solid #8c7b66;
         padding-top: 20px;
-        width: 60%;
     }
 </style>
 </head>
@@ -239,13 +207,13 @@ CHROMATICS_TEMPLATE = """
         <!-- 1. 指令帮助 -->
         <h2>Ordinances (指令)</h2>
         <ul>
-            <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图。支持中文描述或英文提示词。</span></li>
-            <li><strong>/imago &lt;Preset&gt;</strong> <span>使用下方列出的预设风格进行创作。</span></li>
-            <li><strong>/imago pro ...</strong> <span>强制使用高阶模型 (Pro) 进行生成。</span></li>
+            <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图 (支持中英文)</span></li>
+            <li><strong>/imago &lt;Preset&gt;</strong> <span>使用预设风格 (如: 手办化)</span></li>
+            <li><strong>/imago pro ...</strong> <span>强制使用高阶 Pro 模型</span></li>
             {% if economy.enabled %}
-            <li><strong>/签到</strong> <span>每日祈祷，获取灵感点数 (Credits)。</span></li>
-            <li><strong>/积分</strong> <span>查询当前剩余的灵感点数。</span></li>
-            <li><strong>/兑换码 &lt;Code&gt;</strong> <span>使用密文兑换灵感点数。</span></li>
+            <li><strong>/签到</strong> <span>每日获取灵感点数</span></li>
+            <li><strong>/积分</strong> <span>查询当前余额</span></li>
+            <li><strong>/兑换码 &lt;Code&gt;</strong> <span>使用密文兑换点数</span></li>
             {% endif %}
         </ul>
 
@@ -256,17 +224,17 @@ CHROMATICS_TEMPLATE = """
                 <div class="info-title">Flash Model</div>
                 <div class="info-value">
                     {% if economy.enabled %}Cost: {{ economy.cost_flash }}{% else %}Free{% endif %} 
-                    <span style="font-size:18px; color:#666">| Daily: {{ quota.flash }}</span>
+                    <span style="font-size:16px; color:#666">/ Image</span>
                 </div>
-                <div class="info-sub">Rate: {{ rate.flash_rpm }} requests/min</div>
+                <div class="info-sub">Daily Limit: {{ quota.flash }} | Rate: {{ rate.flash_rpm }} rpm</div>
             </div>
             <div class="info-box">
                 <div class="info-title">Pro Model</div>
                 <div class="info-value">
                     {% if economy.enabled %}Cost: {{ economy.cost_pro }}{% else %}Free{% endif %}
-                    <span style="font-size:18px; color:#666">| Daily: {{ quota.pro }}</span>
+                    <span style="font-size:16px; color:#666">/ Image</span>
                 </div>
-                <div class="info-sub">Cooldown: {{ rate.pro_cooldown }} seconds</div>
+                <div class="info-sub">Daily Limit: {{ quota.pro }} | CD: {{ rate.pro_cooldown }}s</div>
             </div>
             {% if economy.enabled %}
             <div class="info-box" style="grid-column: span 2;">
@@ -285,7 +253,7 @@ CHROMATICS_TEMPLATE = """
         </div>
 
         <div class="footer">
-            Gemini Drawer Plugin v3.4.0 | Sub Rosa Imago
+            Gemini Drawer Plugin v3.5.0 | Sub Rosa Imago
         </div>
     </div>
 </body>
@@ -299,6 +267,7 @@ class ImageWorkflow:
         
     async def _download_image(self, url: str) -> bytes | None:
         try:
+            # 显式处理代理逻辑，防止 None 导致错误
             proxy = self.proxy_url if self.proxy_url else None
             async with self.session.get(url, proxy=proxy) as resp:
                 resp.raise_for_status()
@@ -356,7 +325,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.4.0",
+    "3.5.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -436,9 +405,12 @@ class GeminiDrawerPlugin(Star):
 
 
     async def initialize(self):
+        # 每次初始化时重新创建 ImageWorkflow
         self.iwf = ImageWorkflow(self.proxy_url)
         
+        # 环境变量管理：防止重启后代理设置混乱
         if self.proxy_url:
+            logger.info(f"检测到代理配置: {self.proxy_url}，正在应用...")
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
         else:
@@ -624,8 +596,9 @@ class GeminiDrawerPlugin(Star):
         }
         
         try:
-            # 传入 viewport width 参数，确保 html_render 按 1000px 宽度渲染
-            img_url = await self.html_render(CHROMATICS_TEMPLATE, render_data, options={"viewport": {"width": 1000, "height": 1200}})
+            # 核心改进: 使用 full_page=True，这会告诉渲染引擎忽略 viewport 高度，截取整个网页
+            # 同时保持 CSS 中的 width: fit-content，实现完美贴合
+            img_url = await self.html_render(CHROMATICS_TEMPLATE, render_data, options={"full_page": True})
             yield event.image_result(img_url)
         except Exception as e:
             logger.error(f"Chromatics 渲染失败: {e}")
@@ -677,7 +650,6 @@ class GeminiDrawerPlugin(Star):
             
         uid = str(event.get_sender_id())
         
-        # 1. 解析配置中的兑换码
         valid_codes = {}
         raw_codes = self.eco_conf.get("redeem_codes", [])
         for item in raw_codes:
@@ -715,6 +687,7 @@ class GeminiDrawerPlugin(Star):
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
+            # 修复 yield from 错误
             async for item in self.subrosa_imago(event):
                 yield item
             return
@@ -871,3 +844,5 @@ class GeminiDrawerPlugin(Star):
 
     async def terminate(self):
         if self.iwf: await self.iwf.terminate()
+        # 尝试清理 Client (虽然 SDK 可能不提供显式 close)
+        self.client = None
