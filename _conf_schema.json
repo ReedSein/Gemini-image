@@ -1,0 +1,219 @@
+{
+    "vertex_project": {
+        "description": "Vertex AI 项目 ID",
+        "type": "string",
+        "hint": "你的 Google Cloud Platform (GCP) 项目ID。认证需设置 GOOGLE_APPLICATION_CREDENTIALS 环境变量。",
+        "obvious_hint": true,
+        "default": ""
+    },
+    "vertex_location": {
+        "description": "Vertex AI 模型所在区域",
+        "type": "string",
+        "hint": "你的模型部署的 GCP 区域，例如 'us-central1' 或 'global'。",
+        "obvious_hint": true,
+        "default": ""
+    },
+    "api_key": {
+        "description": "Vertex AI Key / AI Studio Key",
+        "type": "string",
+        "hint": "Key",
+        "obvious_hint": true,
+        "default": ""
+    },
+    "auth_json_path": {
+        "description": "GCP 认证 JSON 文件路径 (可选)",
+        "type": "string",
+        "hint": "如果设置环境变量不方便，可在此直接填写 auth.json 文件的绝对路径。",
+        "default": ""
+    },
+    "vertex_auth_json": {
+        "description": "GCP 认证 JSON 内容 (备用)",
+        "type": "string",
+        "hint": "直接粘贴 service account json 的完整内容。若未填写路径配置，将自动生成临时文件使用。",
+        "default": ""
+    },
+    "model_name": {
+        "description": "使用的默认模型 (Fallback)",
+        "type": "string",
+        "default": "gemini-2.5-flash-image"
+    },
+    "system_instruction": {
+        "description": "【核心】系统提示词 (System Instruction)",
+        "type": "text",
+        "editor_mode": true,
+        "hint": "全局生效。用于设定模型的行为准则、安全限制或画风偏好。例如：'你是一个专业的绘图助手，严禁生成血腥暴力内容'。",
+        "default": "你是一个专业的AI绘图助手。请根据用户的描述生成高质量的图片。如果用户请求包含敏感、色情或暴力的内容，请拒绝生成并礼貌告知。"
+    },
+    "save_image": {
+        "description": "是否保存生成的图片",
+        "type": "bool",
+        "default": true
+    },
+    "proxy_url": {
+        "description": "代理地址",
+        "type": "string",
+        "hint": "例如 socks5://127.0.0.1:23344",
+        "default": "socks5://127.0.0.1:23344"
+    },
+    "admin_id": {
+        "description": "管理员QQ号",
+        "type": "string",
+        "hint": "免除配额和积分限制的用户ID",
+        "default": ""
+    },
+    "rate_limits": {
+        "description": "【风控】频率限制配置",
+        "type": "object",
+        "items": {
+            "flash_rpm": {
+                "description": "Flash 模型每分钟最大请求数",
+                "type": "int",
+                "default": 3,
+                "hint": "例如设为 3，即每分钟最多允许该用户调用 3 次。"
+            },
+            "pro_cooldown": {
+                "description": "Pro 模型冷却时间 (秒)",
+                "type": "int",
+                "default": 90,
+                "hint": "Pro 模型较贵，建议设置冷却时间。例如 90 代表每 90 秒只能调用 1 次。"
+            }
+        }
+    },
+    "quota": {
+        "description": "【风控】每日总次数配额",
+        "type": "object",
+        "items": {
+            "flash": {
+                "description": "Flash 模型每日上限",
+                "type": "int",
+                "default": 50
+            },
+            "pro": {
+                "description": "Pro 模型每日上限",
+                "type": "int",
+                "default": 10
+            }
+        }
+    },
+    "economy": {
+        "description": "【经济系统】积分与签到配置",
+        "type": "object",
+        "items": {
+            "enabled": {
+                "description": "是否开启积分系统",
+                "type": "bool",
+                "default": true
+            },
+            "cost_flash": {
+                "description": "Flash 模型单次消耗积分",
+                "type": "int",
+                "default": 10
+            },
+            "cost_pro": {
+                "description": "Pro 模型单次消耗积分",
+                "type": "int",
+                "default": 50
+            },
+            "checkin_min": {
+                "description": "签到奖励最小值",
+                "type": "int",
+                "default": 20
+            },
+            "checkin_max": {
+                "description": "签到奖励最大值",
+                "type": "int",
+                "default": 100
+            }
+        }
+    },
+    "base_prompts": {
+        "description": "通用提示词前缀 (Base Prompts)",
+        "type": "object",
+        "hint": "拼接在用户 Prompt 之前的固定话术",
+        "items": {
+            "text_to_image_base_prompt": {
+                "description": "文生图前缀",
+                "type": "text",
+                "editor_mode": true,
+                "default": "Create a image based on the following description."
+            },
+            "image_to_image_base_prompt": {
+                "description": "图生图前缀",
+                "type": "text",
+                "editor_mode": true,
+                "default": "Using the provided image as a reference, redraw it according to the following instructions. "
+            }
+        }
+    },
+    "style_presets": {
+        "description": "【风格】预设列表",
+        "type": "list",
+        "hint": "在这里添加、修改或删除 /met 指令可用的预设。",
+        "items": {
+            "type": "object",
+            "items": {
+                "name": {
+                    "description": "指令名称 (例如: 手办化)",
+                    "type": "string"
+                },
+                "enabled": {
+                    "description": "是否启用",
+                    "type": "bool",
+                    "default": true
+                },
+                "prompt": {
+                    "description": "详细提示词 (Prompt)",
+                    "type": "string",
+                    "editor_mode": true
+                }
+            }
+        },
+        "default": [
+            {
+                "name": "手办化",
+                "enabled": true,
+                "prompt": "Your task is to create a photorealistic, masterpiece-quality image of a 1/7 scale commercialized figurine based on the user's character. The final image must be in a realistic style and environment.\n\n**Crucial Instruction on Face & Likeness:** The figurine's face is the most critical element. It must be a perfect, high-fidelity 3D translation of the character from the source image. The sculpt must be sharp, clean, and intricately detailed, accurately capturing the original artwork's facial structure, eye style, expression, and hair. The final result must be immediately recognizable as the same character, elevated to a premium physical product standard. Do NOT generate a generic or abstract face.\n\n**Scene Composition (Strictly follow these details):**\n1. **Figurine & Base:** Place the figure on a computer desk. It must stand on a simple, circular, transparent acrylic base WITHOUT any text or markings.\n2. **Computer Monitor:** In the background, a computer monitor must display 3D modeling software (like ZBrush or Blender) with the digital sculpt of the very same figurine visible on the screen.\n3. **Artwork Display:** Next to the computer screen, include a transparent acrylic board with a wooden base. This board holds a print of the original 2D artwork that the figurine is based on.\n4. **Environment:** The overall setting is a desk, with elements like a keyboard to enhance realism. The lighting should be natural and well-lit, as if in a room."
+            },
+            {
+                "name": "Q版化",
+                "enabled": true,
+                "prompt": "((chibi style)), ((super-deformed)), ((head-to-body ratio 1:2)), ((huge head, tiny body)), ((smooth rounded limbs)), ((soft balloon-like hands and feet)), ((plump cheeks)), ((childlike big eyes)), ((simplified facial features)), ((smooth matte skin, no pores)), ((soft pastel color palette)), ((gentle ambient lighting, natural shadows)), ((same facial expression, same pose, same background scene)), ((seamless integration with original environment, correct perspective and scale)), ((no outline or thin soft outline)), ((high resolution, sharp focus, 8k, ultra-detailed)), avoid: realistic proportions, long limbs, sharp edges, harsh lighting, wrinkles, blemishes, thick black outlines, low resolution, blurry, extra limbs, distorted face"
+            },
+            {
+                "name": "痛屋化",
+                "enabled": true,
+                "prompt": "[ABSOLUTE PRIORITY AND NON-NEGOTIABLE DIRECTIVE] Based on the provided reference image, generate a hyper-detailed photograph of a maximalist otaku shrine with a strict, uncompromising requirement: all character-related elements—including figures, posters, bedding patterns, and the PC wallpaper—must be a 90%+ faithful, pixel-perfect replication of the character in the reference image. Strictly maintain the precise facial features, hairstyle, outfit, and expression with zero artistic reinterpretation or stylistic variation. With this core rule, create the scene at a 16:9 aspect ratio. The room is densely packed from floor to ceiling with merchandise that is an exact reproduction of this source character. The entire space is bathed in a moody, immersive ambient glow dominated by the reference character's primary color scheme (e.g., deep purple), which is sharply contrasted by a focused, brighter white light from a monitor screen bar lamp, creating dramatic visual layers. The walls are a collage made of posters and prints that are direct, unaltered copies of the reference image itself; the glass cabinets are cluttered with high-poly figures that are perfect 1:1 replicas of the reference character model; and the ultrawide monitor clearly displays the original reference image as its wallpaper. The final image must be a photorealistic, lived-in sanctuary, defined by its obsessive and flawless fidelity to the source character."
+            },
+            {
+                "name": "痛车化",
+                "enabled": true,
+                "prompt": "A Xiaomi SU7 electric sedan with a professional 'itasha' wrap, parked on a rain-slicked, neon-lit city street at dusk. Accurately depict the Xiaomi SU7 body shape, grille-less front fascia, slim headlights, taillights, wheel design, and logo placements. The entire car is covered in a vibrant, high-resolution decal featuring multiple dynamic poses and expressions of ONLY the provided anime character. The glossy finish reflects colorful city lights, making the character artwork pop.Seamless full-body wrap integrating hood, doors, and rear quarter panels. Dynamic three-quarter front view showcasing the hood and side artwork."
+            },
+            {
+                "name": "穿搭拆解",
+                "enabled": true,
+                "prompt": "A professional e-commerce fashion showcase featuring the clothing worn by the character from the input image, presented in a clean, studio-style setting. The outfit is decomposed into individual pieces (e.g., top, bottom, jacket, shoes, accessories), each clearly displayed and arranged in an organized, visually appealing layout. Each clothing item retains the exact design, color, texture, and details from the original image, showcased with crisp lighting and high-definition clarity. The background is minimalistic, white or neutral, to emphasize the clothing details, suitable for an online retail platform. The presentation includes subtle annotations or labels for each item, ensuring a polished, catalog-style look for wear and styling inspiration."
+            },
+            {
+                "name": "三视图",
+                "enabled": true,
+                "prompt": "a 3-view orthographic drawing of a young woman from a photo, showing front, right side, and back views. Realistic rendering, professional character sheet style, on a white background"
+            },
+            {
+                "name": "拆解图",
+                "enabled": true,
+                "prompt": "Convert the people in the photos to the style of a model kit box, rendered in isometric perspective. Label the box with the title“Zhogue”. Inside the box, a gouda-styled robotic version of the person in the photo is displayed, along with its essentials (such as cosmetics, bags, or other items) redesigned as a futuristic mechanical accessory. The box should resemble a real Gunpla box, with technical illustrations, manual-style details, and sci-fi fonts. Next to the box, the actual gouda-style robot itself is also displayed, rendered in a realistic and lifelike style on the outside of the packaging, similar to the official Bandai propaganda renderings."
+            },
+            {
+                "name": "像素",
+                "enabled": true,
+                "prompt": "Convert this image into 16-bit pixel art style, high detail, retro aesthetic."
+            },
+            {
+                "name": "乐高",
+                "enabled": true,
+                "prompt": "Transform the subject into a LEGO brick model, realistic lego texture, studio lighting."
+            }
+        ]
+    }
+}
