@@ -62,7 +62,8 @@
             "menu_start": {
                 "description": "菜单渲染时发送提示",
                 "type": "bool",
-                "default": true
+                "default": true,
+                "hint": "开启后，使用 /subrosa_ima 时会回复 '正在绘制 Chromatics 卷轴...'"
             }
         }
     },
@@ -191,5 +192,3 @@
         }
     }
 }
-
-
