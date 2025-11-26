@@ -25,8 +25,8 @@ from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-# --- Chromatics 古典风格模板 (v3.5.0 稳健渲染版) ---
-# 吸取了 TRPG 插件的 fit-content 布局经验，确保截图不崩坏
+# --- Chromatics 古典风格模板 (v3.6.0 稳健渲染版) ---
+# 采用 TRPG 插件的 fit-content 布局，完美适配各种分辨率
 CHROMATICS_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -35,42 +35,43 @@ CHROMATICS_TEMPLATE = """
 <style>
     body {
         margin: 0;
-        padding: 60px;
-        background-color: transparent; /* 背景透明，由容器决定颜色 */
+        padding: 40px;
+        background-color: transparent; /* 透明背景，由容器接管 */
+        /* 优先使用系统衬线字体，无网络依赖 */
         font-family: 'Georgia', 'Times New Roman', 'Songti SC', 'SimSun', serif;
         display: flex;
         justify-content: center;
         align-items: flex-start;
-        /* 核心黑科技：让 Body 宽度自适应内容，配合 full_page=True 实现完美截图 */
+        /* 核心布局：适应内容宽度，防止截图截断 */
         width: fit-content;
         min-width: 100%;
     }
 
     .frame {
-        /* 羊皮纸质感背景 */
+        /* 羊皮纸背景 */
         background-color: #f0e6d2;
         background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
         
-        border: 8px double #5c4b37;
+        border: 12px double #5c4b37;
         padding: 50px;
-        box-shadow: 20px 20px 50px rgba(0,0,0,0.3); /* 更深邃的阴影 */
-        width: 900px; /* 固定宽度，保证排版一致 */
+        box-shadow: 15px 15px 40px rgba(0,0,0,0.3);
+        width: 900px; /* 固定宽度确保排版一致 */
         color: #2c241b;
         position: relative;
         box-sizing: border-box;
-        border-radius: 4px;
+        border-radius: 6px;
     }
 
     .frame::before {
         content: "";
         position: absolute;
-        top: 10px; left: 10px; right: 10px; bottom: 10px;
+        top: 12px; left: 12px; right: 12px; bottom: 12px;
         border: 2px solid #8c7b66;
         pointer-events: none;
     }
 
     h1 {
-        font-size: 64px;
+        font-size: 60px;
         text-align: center;
         color: #8b0000;
         margin: 0 0 10px 0;
@@ -86,7 +87,7 @@ CHROMATICS_TEMPLATE = """
         color: #5c4b37;
         font-size: 20px;
         margin-bottom: 40px;
-        border-bottom: 2px solid #5c4b37;
+        border-bottom: 3px solid #5c4b37;
         padding-bottom: 20px;
         display: block;
         margin-left: auto;
@@ -132,7 +133,7 @@ CHROMATICS_TEMPLATE = """
         color: #8b0000;
         font-weight: 700;
         margin-right: 15px;
-        min-width: 200px; /* 确保指令列对齐 */
+        min-width: 220px;
         font-family: 'Courier New', monospace; /* 等宽字体显示指令 */
     }
 
@@ -253,7 +254,7 @@ CHROMATICS_TEMPLATE = """
         </div>
 
         <div class="footer">
-            Gemini Drawer Plugin v3.5.0 | Sub Rosa Imago
+            Gemini Drawer Plugin v3.6.0 | Sub Rosa Imago
         </div>
     </div>
 </body>
@@ -267,7 +268,6 @@ class ImageWorkflow:
         
     async def _download_image(self, url: str) -> bytes | None:
         try:
-            # 显式处理代理逻辑，防止 None 导致错误
             proxy = self.proxy_url if self.proxy_url else None
             async with self.session.get(url, proxy=proxy) as resp:
                 resp.raise_for_status()
@@ -325,7 +325,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.5.0",
+    "3.6.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -389,7 +389,7 @@ class GeminiDrawerPlugin(Star):
         self.default_rpm = 5
         self.usage_history = defaultdict(lambda: defaultdict(deque))
         
-        # --- 预设加载 ---
+        # --- 预设加载 (支持 \n 换行) ---
         self.presets = {}
         style_presets = self.conf.get("style_presets", [])
         if style_presets:
@@ -397,7 +397,9 @@ class GeminiDrawerPlugin(Star):
             for item in style_presets:
                 if isinstance(item, str) and ":" in item:
                     name, prompt = item.split(":", 1)
-                    self.presets[name.strip()] = prompt.strip()
+                    # 核心修改：支持将字符串中的 \n 替换为真实的换行符
+                    clean_prompt = prompt.strip().replace("\\n", "\n")
+                    self.presets[name.strip()] = clean_prompt
                     count += 1
             logger.info(f"从配置中加载了 {count} 个风格预设。")
         else:
@@ -405,15 +407,13 @@ class GeminiDrawerPlugin(Star):
 
 
     async def initialize(self):
-        # 每次初始化时重新创建 ImageWorkflow
         self.iwf = ImageWorkflow(self.proxy_url)
         
-        # 环境变量管理：防止重启后代理设置混乱
         if self.proxy_url:
-            logger.info(f"检测到代理配置: {self.proxy_url}，正在应用...")
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
         else:
+            # 清理环境变量，防止残留
             os.environ.pop("http_proxy", None)
             os.environ.pop("https_proxy", None)
             
@@ -596,8 +596,7 @@ class GeminiDrawerPlugin(Star):
         }
         
         try:
-            # 核心改进: 使用 full_page=True，这会告诉渲染引擎忽略 viewport 高度，截取整个网页
-            # 同时保持 CSS 中的 width: fit-content，实现完美贴合
+            # 使用 TRPG 风格的 full_page 截图，配合 CSS 的 fit-content 确保完美渲染
             img_url = await self.html_render(CHROMATICS_TEMPLATE, render_data, options={"full_page": True})
             yield event.image_result(img_url)
         except Exception as e:
@@ -687,7 +686,6 @@ class GeminiDrawerPlugin(Star):
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
-            # 修复 yield from 错误
             async for item in self.subrosa_imago(event):
                 yield item
             return
@@ -844,5 +842,4 @@ class GeminiDrawerPlugin(Star):
 
     async def terminate(self):
         if self.iwf: await self.iwf.terminate()
-        # 尝试清理 Client (虽然 SDK 可能不提供显式 close)
-        self.client = None
+        self.client = None # 释放 Client 引用
