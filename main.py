@@ -25,21 +25,21 @@ from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-# --- Chromatics 古典风格模板 ---
+# --- Chromatics 古典风格模板 (离线版) ---
+# 移除了 googleapis 的字体引用，防止国内网络超时
 CHROMATICS_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
-    
     body {
         margin: 0;
         padding: 60px;
         background-color: #f0e6d2;
         background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
-        font-family: 'Lora', 'Georgia', serif;
+        /* 使用系统自带衬线字体，兼容性最好 */
+        font-family: 'Georgia', 'Times New Roman', 'Songti SC', 'SimSun', serif;
         color: #2c241b;
         width: 800px;
         box-sizing: border-box;
@@ -62,7 +62,6 @@ CHROMATICS_TEMPLATE = """
     }
 
     h1 {
-        font-family: 'Cinzel', serif;
         font-size: 56px;
         text-align: center;
         color: #8b0000;
@@ -70,6 +69,7 @@ CHROMATICS_TEMPLATE = """
         text-transform: uppercase;
         letter-spacing: 8px;
         text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
+        font-weight: bold;
     }
 
     .subtitle {
@@ -85,7 +85,6 @@ CHROMATICS_TEMPLATE = """
     }
 
     h2 {
-        font-family: 'Cinzel', serif;
         font-size: 24px;
         color: #2c241b;
         border-bottom: 2px solid #e0d0b8;
@@ -94,6 +93,7 @@ CHROMATICS_TEMPLATE = """
         margin-bottom: 15px;
         display: flex;
         align-items: center;
+        font-weight: bold;
     }
 
     h2::before {
@@ -138,7 +138,6 @@ CHROMATICS_TEMPLATE = """
 
     .info-title {
         font-weight: bold;
-        font-family: 'Cinzel', serif;
         color: #5c4b37;
         margin-bottom: 5px;
         font-size: 14px;
@@ -147,6 +146,7 @@ CHROMATICS_TEMPLATE = """
     .info-value {
         font-size: 18px;
         color: #2c241b;
+        font-weight: bold;
     }
 
     .preset-container {
@@ -156,7 +156,6 @@ CHROMATICS_TEMPLATE = """
     }
 
     .preset-tag {
-        font-family: 'Cinzel', serif;
         background: #fff;
         border: 1px solid #8b0000;
         color: #8b0000;
@@ -165,6 +164,7 @@ CHROMATICS_TEMPLATE = """
         border-radius: 2px;
         text-transform: uppercase;
         box-shadow: 2px 2px 0px rgba(139, 0, 0, 0.1);
+        font-weight: bold;
     }
 
     .footer {
@@ -231,7 +231,7 @@ CHROMATICS_TEMPLATE = """
         </div>
 
         <div class="footer">
-            Gemini Drawer Plugin v3.3.0 | Sub Rosa Imago
+            Gemini Drawer Plugin v3.3.1 | Sub Rosa Imago
         </div>
     </div>
 </body>
@@ -302,7 +302,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.3.0",
+    "3.3.1",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -325,7 +325,6 @@ class GeminiDrawerPlugin(Star):
         self.user_points_data = {}
         self._load_points_data()
         
-        # 兑换码历史记录 { "code": ["user1", "user2"] }
         self.redeem_history_file = self.plugin_data_dir / "redeem_history.json"
         self.redeem_history = {}
         self._load_redeem_data()
@@ -560,7 +559,9 @@ class GeminiDrawerPlugin(Star):
         """生成古典风格的帮助菜单 (Chromatics)"""
         logger.info("Rendering Chromatics menu...")
         
-        if self.feedback_conf.get("menu_start", False):
+        # === 无论配置如何，这里建议强制反馈，防止用户以为卡死 ===
+        # 如果你希望完全遵守配置，请去掉 or True (但强烈不建议)
+        if self.feedback_conf.get("menu_start", True):
             yield event.plain_result("📜 正在绘制 Chromatics 卷轴，请稍候...")
         
         render_data = {
@@ -664,6 +665,7 @@ class GeminiDrawerPlugin(Star):
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
+            # 修复: 使用 async for 代理 yield
             async for item in self.subrosa_imago(event):
                 yield item
             return
@@ -712,7 +714,6 @@ class GeminiDrawerPlugin(Star):
 
         mode = "图生图" if image_bytes_list else "文生图"
         
-        # === 自定义反馈提示 ===
         if self.feedback_conf.get("draw_start", True):
             template = self.feedback_conf.get("draw_start_text", "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...")
             try:
