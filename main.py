@@ -191,6 +191,7 @@ CHROMATICS_TEMPLATE = """
             {% if economy.enabled %}
             <li><strong>/签到</strong> <span>每日祈祷，获取灵感点数 (Credits)。</span></li>
             <li><strong>/积分</strong> <span>查询当前剩余的灵感点数。</span></li>
+            <li><strong>/兑换码 &lt;Code&gt;</strong> <span>兑换灵感点数。</span></li>
             {% endif %}
         </ul>
 
@@ -230,7 +231,7 @@ CHROMATICS_TEMPLATE = """
         </div>
 
         <div class="footer">
-            Gemini Drawer Plugin v3.2.1 | Sub Rosa Imago
+            Gemini Drawer Plugin v3.3.0 | Sub Rosa Imago
         </div>
     </div>
 </body>
@@ -301,7 +302,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.2.1",
+    "3.3.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -323,6 +324,11 @@ class GeminiDrawerPlugin(Star):
         self.points_file = self.plugin_data_dir / "user_points.json"
         self.user_points_data = {}
         self._load_points_data()
+        
+        # 兑换码历史记录 { "code": ["user1", "user2"] }
+        self.redeem_history_file = self.plugin_data_dir / "redeem_history.json"
+        self.redeem_history = {}
+        self._load_redeem_data()
 
         # --- 配额配置 ---
         quota_conf = self.conf.get("quota", {})
@@ -428,6 +434,17 @@ class GeminiDrawerPlugin(Star):
     def _save_points_data(self):
         try:
             self.points_file.write_text(json.dumps(self.user_points_data, indent=2, ensure_ascii=False), encoding='utf-8')
+        except: pass
+
+    def _load_redeem_data(self):
+        if self.redeem_history_file.exists():
+            try:
+                self.redeem_history = json.loads(self.redeem_history_file.read_text(encoding='utf-8'))
+            except: self.redeem_history = {}
+    
+    def _save_redeem_data(self):
+        try:
+            self.redeem_history_file.write_text(json.dumps(self.redeem_history, indent=2, ensure_ascii=False), encoding='utf-8')
         except: pass
 
     def _get_points(self, user_id: str) -> int:
@@ -562,6 +579,7 @@ class GeminiDrawerPlugin(Star):
 
     @filter.command("签到")
     async def checkin(self, event: AstrMessageEvent):
+        """每日签到领取积分"""
         if not self.enable_economy:
             yield event.plain_result("本机器人未开启积分系统。")
             return
@@ -592,17 +610,60 @@ class GeminiDrawerPlugin(Star):
         uid = event.get_sender_id()
         yield event.plain_result(f"💰 当前积分: {self._get_points(uid)}")
 
+    @filter.command("兑换码")
+    async def redeem(self, event: AstrMessageEvent, code: str = ""):
+        """使用兑换码获取积分"""
+        if not self.enable_economy:
+            yield event.plain_result("本机器人未开启积分系统。")
+            return
+        
+        if not code:
+            yield event.plain_result("请输入兑换码，例如：/兑换码 VIP888")
+            return
+            
+        uid = str(event.get_sender_id())
+        
+        # 1. 解析配置中的兑换码
+        valid_codes = {}
+        raw_codes = self.eco_conf.get("redeem_codes", [])
+        for item in raw_codes:
+            if ":" in item:
+                c, amount = item.split(":", 1)
+                try:
+                    valid_codes[c.strip()] = int(amount)
+                except: pass
+        
+        # 2. 验证码是否存在
+        if code not in valid_codes:
+            yield event.plain_result("❌ 无效的兑换码。")
+            return
+            
+        # 3. 验证是否已使用
+        used_users = self.redeem_history.get(code, [])
+        if uid in used_users:
+            yield event.plain_result("❌ 您已经使用过这个兑换码了。")
+            return
+            
+        # 4. 兑换成功
+        amount = valid_codes[code]
+        self._add_points(uid, amount)
+        
+        if code not in self.redeem_history:
+            self.redeem_history[code] = []
+        self.redeem_history[code].append(uid)
+        self._save_redeem_data()
+        
+        yield event.plain_result(f"🎉 兑换成功！获得 {amount} 积分。\n当前余额: {self._get_points(uid)}")
+
     @filter.command("imago", aliases={"draw", "生成", "画图"})
     async def on_imago(self, event: AstrMessageEvent):
         if not self.is_initialized:
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
         
-        # === 核心指令识别: imago ===
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
-            # 修复 yield from 错误：使用 async for 循环
             async for item in self.subrosa_imago(event):
                 yield item
             return
@@ -646,13 +707,19 @@ class GeminiDrawerPlugin(Star):
         if self.enable_economy:
             cost = self.eco_conf.get(f"cost_{target_model_alias}", 0)
             if not self._check_balance(user_id, cost):
-                yield event.plain_result(f"💸 积分不足！\n{target_model_alias} 模型需 {cost} 积分，当前余额 {self._get_points(user_id)}。\n请发送 /签到")
+                yield event.plain_result(f"💸 积分不足！\n{target_model_alias} 模型需 {cost} 积分，当前余额 {self._get_points(user_id)}。\n请发送 /签到 或使用 /兑换码")
                 return
 
         mode = "图生图" if image_bytes_list else "文生图"
         
+        # === 自定义反馈提示 ===
         if self.feedback_conf.get("draw_start", True):
-            yield event.plain_result(f"OK，正在{mode} (模型: {target_model_alias}，预计消耗 {cost} 积分)...")
+            template = self.feedback_conf.get("draw_start_text", "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...")
+            try:
+                msg = template.format(mode=mode, model=target_model_alias, cost=cost)
+                yield event.plain_result(msg)
+            except Exception:
+                yield event.plain_result(f"OK，正在{mode}...")
         
         res = await self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt)
         
