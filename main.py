@@ -230,7 +230,7 @@ CHROMATICS_TEMPLATE = """
         </div>
 
         <div class="footer">
-            Gemini Drawer Plugin v3.2.0 | Sub Rosa Imago
+            Gemini Drawer Plugin v3.2.1 | Sub Rosa Imago
         </div>
     </div>
 </body>
@@ -301,7 +301,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "3.2.0",
+    "3.2.1",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -602,7 +602,9 @@ class GeminiDrawerPlugin(Star):
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
-            yield from self.subrosa_imago(event)
+            # 修复 yield from 错误：使用 async for 循环
+            async for item in self.subrosa_imago(event):
+                yield item
             return
 
         parts = raw_content.split()
