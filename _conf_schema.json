@@ -52,8 +52,8 @@
     "proxy_url": {
         "description": "代理地址",
         "type": "string",
-        "hint": "例如 socks5://127.0.0.1:23344",
-        "default": "socks5://127.0.0.1:23344"
+        "hint": "例如 socks5://127.0.0.1:23344，留空则不使用代理。",
+        "default": ""
     },
     "admin_id": {
         "description": "管理员QQ号",
