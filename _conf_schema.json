@@ -41,25 +41,28 @@
         "description": "【核心】系统提示词 (System Instruction)",
         "type": "text",
         "editor_mode": true,
-        "hint": "全局生效。用于设定模型的行为准则、安全限制或画风偏好。例如：'你是一个专业的绘图助手，严禁生成血腥暴力内容'。",
+        "hint": "全局生效。用于设定模型的行为准则、安全限制或画风偏好。",
         "default": "你是一个专业的AI绘图助手。请根据用户的描述生成高质量的图片。如果用户请求包含敏感、色情或暴力的内容，请拒绝生成并礼貌告知。"
     },
     "feedback": {
         "description": "【交互】消息反馈设置",
         "type": "object",
-        "hint": "控制机器人是否发送“正在处理中”的提示消息。",
         "items": {
             "draw_start": {
                 "description": "生图开始时发送提示",
                 "type": "bool",
-                "default": true,
-                "hint": "开启后，使用 /imago 时会回复 'OK，正在文生图...'"
+                "default": true
+            },
+            "draw_start_text": {
+                "description": "生图提示语文案",
+                "type": "text",
+                "default": "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...",
+                "hint": "可用变量: {mode}(文/图生图), {model}(模型名), {cost}(消耗积分)"
             },
             "menu_start": {
                 "description": "菜单渲染时发送提示",
                 "type": "bool",
-                "default": false,
-                "hint": "开启后，使用 /subrosa_imago 时会回复 '正在绘制 Chromatics 卷轴...'"
+                "default": false
             }
         }
     },
@@ -140,6 +143,13 @@
                 "description": "签到奖励最大值",
                 "type": "int",
                 "default": 100
+            },
+            "redeem_codes": {
+                "description": "兑换码列表",
+                "type": "list",
+                "default": ["GEMINI2025:100", "WELCOME:50"],
+                "hint": "格式 '兑换码:积分'。例如 'VIP888:1000'。每个码每个用户限用一次。",
+                "items": { "type": "string" }
             }
         }
     },
