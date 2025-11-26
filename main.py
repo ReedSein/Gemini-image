@@ -91,7 +91,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "2.8.0",
+    "2.8.2",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -101,8 +101,6 @@ class GeminiDrawerPlugin(Star):
         self.plugin_data_dir = StarTools.get_data_dir("astrbot_plugin_gemini_drawer")
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         
-        # === 核心修改：移除默认代理 ===
-        # 如果配置中未填写，则默认为空字符串，不启用代理
         self.proxy_url = self.conf.get("proxy_url", "")
         self.admin_id = self.conf.get("admin_id", "")
         
@@ -164,16 +162,13 @@ class GeminiDrawerPlugin(Star):
 
 
     async def initialize(self):
-        # 传入可能为空的代理地址
         self.iwf = ImageWorkflow(self.proxy_url)
         
-        # === 核心修改：只有在配置了代理时才设置环境变量 ===
         if self.proxy_url:
             logger.info(f"检测到代理配置: {self.proxy_url}，正在应用...")
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
         else:
-            # 如果之前设置过（例如热重载），尝试清除，避免残留
             os.environ.pop("http_proxy", None)
             os.environ.pop("https_proxy", None)
             
@@ -331,9 +326,8 @@ class GeminiDrawerPlugin(Star):
 
     @filter.command("签到")
     async def checkin(self, event: AstrMessageEvent):
-        """每日签到领取积分"""
         if not self.enable_economy:
-            yield event.plain_result("本机器人未开启积分系统。")
+            yield event.plain_result("罗莎未开启积分系统喵。")
             return
             
         uid = str(event.get_sender_id())
@@ -368,7 +362,13 @@ class GeminiDrawerPlugin(Star):
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
         
-        raw_content = re.sub(r"^(met|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
+        # === 核心修复：兼容带前缀的指令解析 ===
+        # 正则解释：
+        # ^[\/&!#]? : 匹配开头可选的 1 个前缀符号 (/ & ! #)
+        # (met|draw|生成|画图) : 匹配指令词
+        # \s* : 匹配可选的空白符
+        # flags=re.IGNORECASE : 忽略大小写
+        raw_content = re.sub(r"^[\/&!#]?(met|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
             if not self.presets:
@@ -384,10 +384,12 @@ class GeminiDrawerPlugin(Star):
         preset_prompt = None
         current_idx = 0
         
+        # 1. 检查模型参数 (flash/pro)
         if parts and parts[0].lower() in self.model_map:
             target_model_alias = parts[0].lower()
             current_idx += 1
         
+        # 2. 检查预设参数
         if len(parts) > current_idx:
             possible_preset = parts[current_idx]
             if possible_preset in self.presets:
@@ -406,7 +408,7 @@ class GeminiDrawerPlugin(Star):
             
         is_daily_allowed, wait_time_str = self._check_daily_limit(user_id, target_model_alias)
         if not is_daily_allowed:
-            yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试。")
+            yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试喵。")
             return
         
         is_allowed, wait_seconds = self._check_quota(user_id, selected_model_name)
@@ -479,7 +481,7 @@ class GeminiDrawerPlugin(Star):
                 types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
                 types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF")
             ],
-            "image_config": types.ImageConfig(image_size="2K", output_mime_type="image/png")
+            "image_config": types.ImageConfig(image_size="2K")
         }
         
         if system_instruction:
@@ -497,7 +499,7 @@ class GeminiDrawerPlugin(Star):
                     contents=[types.Content(role="user", parts=parts)],
                     config=generate_content_config,
                 )
-                if not response or not response.candidates: return "空回复，可能被审查"
+                if not response or not response.candidates: return "空回复，可能被审查喵。"
                 
                 if response.candidates:
                     for part in response.candidates[0].content.parts:
