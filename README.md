@@ -1,6 +1,6 @@
-# helloworld
+# 罗莎Gemini生图
 
-AstrBot 插件模板
+如题
 
 A template plugin for AstrBot plugin feature
 
