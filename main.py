@@ -25,6 +25,218 @@ from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
+# --- Chromatics 古典风格模板 ---
+CHROMATICS_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+    
+    body {
+        margin: 0;
+        padding: 60px;
+        background-color: #f0e6d2;
+        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.15'/%3E%3C/svg%3E");
+        font-family: 'Lora', 'Georgia', serif;
+        color: #2c241b;
+        width: 800px;
+        box-sizing: border-box;
+    }
+
+    .frame {
+        border: 4px double #5c4b37;
+        padding: 40px;
+        background-color: rgba(255, 253, 245, 0.9);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    .frame::before {
+        content: "";
+        position: absolute;
+        top: 5px; left: 5px; right: 5px; bottom: 5px;
+        border: 1px solid #8c7b66;
+        pointer-events: none;
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif;
+        font-size: 56px;
+        text-align: center;
+        color: #8b0000;
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+        letter-spacing: 8px;
+        text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
+    }
+
+    .subtitle {
+        text-align: center;
+        font-style: italic;
+        color: #5c4b37;
+        font-size: 16px;
+        margin-bottom: 40px;
+        border-bottom: 1px solid #5c4b37;
+        padding-bottom: 20px;
+        display: inline-block;
+        width: 100%;
+    }
+
+    h2 {
+        font-family: 'Cinzel', serif;
+        font-size: 24px;
+        color: #2c241b;
+        border-bottom: 2px solid #e0d0b8;
+        padding-bottom: 8px;
+        margin-top: 35px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+    }
+
+    h2::before {
+        content: "❖";
+        margin-right: 10px;
+        color: #8b0000;
+        font-size: 18px;
+    }
+
+    ul {
+        list-style: none;
+        padding: 0;
+    }
+
+    li {
+        margin-bottom: 10px;
+        font-size: 17px;
+        line-height: 1.5;
+        display: flex;
+        align-items: baseline;
+    }
+
+    li strong {
+        color: #8b0000;
+        font-weight: 700;
+        margin-right: 8px;
+        min-width: 120px;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .info-box {
+        background: #f4efe6;
+        padding: 15px;
+        border-radius: 2px;
+        border: 1px solid #dcd0c0;
+    }
+
+    .info-title {
+        font-weight: bold;
+        font-family: 'Cinzel', serif;
+        color: #5c4b37;
+        margin-bottom: 5px;
+        font-size: 14px;
+    }
+
+    .info-value {
+        font-size: 18px;
+        color: #2c241b;
+    }
+
+    .preset-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .preset-tag {
+        font-family: 'Cinzel', serif;
+        background: #fff;
+        border: 1px solid #8b0000;
+        color: #8b0000;
+        padding: 6px 12px;
+        font-size: 14px;
+        border-radius: 2px;
+        text-transform: uppercase;
+        box-shadow: 2px 2px 0px rgba(139, 0, 0, 0.1);
+    }
+
+    .footer {
+        margin-top: 50px;
+        text-align: center;
+        font-size: 12px;
+        color: #8c7b66;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+</style>
+</head>
+<body>
+    <div class="frame">
+        <h1>Chromatics</h1>
+        <div class="subtitle">The Artificer's Guide to Digital Manifestation</div>
+
+        <!-- 1. 指令帮助 -->
+        <h2>Ordinances (指令)</h2>
+        <ul>
+            <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图。支持中文描述或英文提示词。</span></li>
+            <li><strong>/imago &lt;Preset&gt;</strong> <span>使用下方列出的预设风格进行创作。</span></li>
+            <li><strong>/imago pro ...</strong> <span>强制使用高阶模型 (Pro) 进行生成。</span></li>
+            {% if economy.enabled %}
+            <li><strong>/签到</strong> <span>每日祈祷，获取灵感点数 (Credits)。</span></li>
+            <li><strong>/积分</strong> <span>查询当前剩余的灵感点数。</span></li>
+            {% endif %}
+        </ul>
+
+        <!-- 2. 经济与限制 -->
+        <h2>Limitations & Specie (法则)</h2>
+        <div class="info-grid">
+            <div class="info-box">
+                <div class="info-title">Flash Model</div>
+                <div class="info-value">
+                    {% if economy.enabled %}Cost: {{ economy.cost_flash }}{% else %}Free{% endif %} 
+                    <span style="font-size:14px; color:#666">| Daily: {{ quota.flash }}</span>
+                </div>
+                <div style="font-size:13px; margin-top:4px; color:#888">Rate: {{ rate.flash_rpm }} requests/min</div>
+            </div>
+            <div class="info-box">
+                <div class="info-title">Pro Model</div>
+                <div class="info-value">
+                    {% if economy.enabled %}Cost: {{ economy.cost_pro }}{% else %}Free{% endif %}
+                    <span style="font-size:14px; color:#666">| Daily: {{ quota.pro }}</span>
+                </div>
+                <div style="font-size:13px; margin-top:4px; color:#888">Cooldown: {{ rate.pro_cooldown }} seconds</div>
+            </div>
+            {% if economy.enabled %}
+            <div class="info-box" style="grid-column: span 2;">
+                <div class="info-title">Daily Blessing (Check-in)</div>
+                <div class="info-value">{{ economy.checkin_min }} - {{ economy.checkin_max }} Credits</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 3. 预设列表 -->
+        <h2>Manifestations (预设)</h2>
+        <div class="preset-container">
+            {% for name in presets %}
+            <span class="preset-tag">{{ name }}</span>
+            {% endfor %}
+        </div>
+
+        <div class="footer">
+            Gemini Drawer Plugin v3.2.0 | Sub Rosa Imago
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 class ImageWorkflow:
     def __init__(self, proxy_url: str = None):
         self.proxy_url = proxy_url
@@ -32,7 +244,6 @@ class ImageWorkflow:
         
     async def _download_image(self, url: str) -> bytes | None:
         try:
-            # 如果 proxy_url 为空，则不使用代理
             proxy = self.proxy_url if self.proxy_url else None
             async with self.session.get(url, proxy=proxy) as resp:
                 resp.raise_for_status()
@@ -72,7 +283,6 @@ class ImageWorkflow:
         for s in event.message_obj.message:
             if isinstance(s, Comp.Reply) and s.chain:
                 all_segments_to_check.extend(s.chain)
-        
         all_segments_to_check.extend(event.message_obj.message)
         for seg in all_segments_to_check:
             if isinstance(seg, Comp.Image):
@@ -91,7 +301,7 @@ class ImageWorkflow:
     "astrbot_plugin_gemini_drawer",
     "Rin & Architect",
     "Gemini 专业生图 (含经济系统)",
-    "2.8.2",
+    "3.2.0",
 )
 class GeminiDrawerPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -104,6 +314,9 @@ class GeminiDrawerPlugin(Star):
         self.proxy_url = self.conf.get("proxy_url", "")
         self.admin_id = self.conf.get("admin_id", "")
         
+        # --- 交互反馈配置 ---
+        self.feedback_conf = self.conf.get("feedback", {})
+        
         # --- 经济系统配置 ---
         self.eco_conf = self.conf.get("economy", {})
         self.enable_economy = self.eco_conf.get("enabled", True)
@@ -113,7 +326,7 @@ class GeminiDrawerPlugin(Star):
 
         # --- 配额配置 ---
         quota_conf = self.conf.get("quota", {})
-        rate_limit_conf = self.conf.get("rate_limits", {})
+        self.rate_limit_conf = self.conf.get("rate_limits", {})
         
         self.daily_limits = {
             "flash": quota_conf.get("flash", 50),
@@ -138,8 +351,8 @@ class GeminiDrawerPlugin(Star):
             "pro": "gemini-3-pro-image-preview"
         }
 
-        flash_rpm = rate_limit_conf.get("flash_rpm", 3)
-        pro_cooldown = rate_limit_conf.get("pro_cooldown", 90)
+        flash_rpm = self.rate_limit_conf.get("flash_rpm", 3)
+        pro_cooldown = self.rate_limit_conf.get("pro_cooldown", 90)
         
         self.rpm_limits = {
             "flash": flash_rpm,
@@ -148,13 +361,15 @@ class GeminiDrawerPlugin(Star):
         self.default_rpm = 5
         self.usage_history = defaultdict(lambda: defaultdict(deque))
         
+        # --- 预设加载 ---
         self.presets = {}
         style_presets = self.conf.get("style_presets", [])
         if style_presets:
             count = 0
             for item in style_presets:
-                if item.get("enabled", True):
-                    self.presets[item["name"]] = item["prompt"]
+                if isinstance(item, str) and ":" in item:
+                    name, prompt = item.split(":", 1)
+                    self.presets[name.strip()] = prompt.strip()
                     count += 1
             logger.info(f"从配置中加载了 {count} 个风格预设。")
         else:
@@ -165,7 +380,6 @@ class GeminiDrawerPlugin(Star):
         self.iwf = ImageWorkflow(self.proxy_url)
         
         if self.proxy_url:
-            logger.info(f"检测到代理配置: {self.proxy_url}，正在应用...")
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
         else:
@@ -324,10 +538,32 @@ class GeminiDrawerPlugin(Star):
     #        指令处理
     # ==========================
 
+    @filter.command("subrosa_imago")
+    async def subrosa_imago(self, event: AstrMessageEvent):
+        """生成古典风格的帮助菜单 (Chromatics)"""
+        logger.info("Rendering Chromatics menu...")
+        
+        if self.feedback_conf.get("menu_start", False):
+            yield event.plain_result("📜 正在绘制 Chromatics 卷轴，请稍候...")
+        
+        render_data = {
+            "economy": self.eco_conf,
+            "quota": self.daily_limits,
+            "rate": self.rate_limit_conf,
+            "presets": list(self.presets.keys())
+        }
+        
+        try:
+            img_url = await self.html_render(CHROMATICS_TEMPLATE, render_data)
+            yield event.image_result(img_url)
+        except Exception as e:
+            logger.error(f"Chromatics 渲染失败: {e}")
+            yield event.plain_result(f"渲染失败: {e}")
+
     @filter.command("签到")
     async def checkin(self, event: AstrMessageEvent):
         if not self.enable_economy:
-            yield event.plain_result("罗莎未开启积分系统喵。")
+            yield event.plain_result("本机器人未开启积分系统。")
             return
             
         uid = str(event.get_sender_id())
@@ -356,27 +592,17 @@ class GeminiDrawerPlugin(Star):
         uid = event.get_sender_id()
         yield event.plain_result(f"💰 当前积分: {self._get_points(uid)}")
 
-    @filter.command("met", aliases={"draw", "生成", "画图"})
-    async def on_met(self, event: AstrMessageEvent):
+    @filter.command("imago", aliases={"draw", "生成", "画图"})
+    async def on_imago(self, event: AstrMessageEvent):
         if not self.is_initialized:
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
         
-        # === 核心修复：兼容带前缀的指令解析 ===
-        # 正则解释：
-        # ^[\/&!#]? : 匹配开头可选的 1 个前缀符号 (/ & ! #)
-        # (met|draw|生成|画图) : 匹配指令词
-        # \s* : 匹配可选的空白符
-        # flags=re.IGNORECASE : 忽略大小写
-        raw_content = re.sub(r"^[\/&!#]?(met|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
+        # === 核心指令识别: imago ===
+        raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
         
         if raw_content == "list":
-            if not self.presets:
-                yield event.plain_result("当前没有可用的预设。")
-            else:
-                msg = "可用预设列表：\n" + "\n".join([f"- {name}" for name in self.presets.keys()])
-                msg += "\n\n使用方法: met [flash/pro] <预设名> <描述>"
-                yield event.plain_result(msg)
+            yield from self.subrosa_imago(event)
             return
 
         parts = raw_content.split()
@@ -384,12 +610,10 @@ class GeminiDrawerPlugin(Star):
         preset_prompt = None
         current_idx = 0
         
-        # 1. 检查模型参数 (flash/pro)
         if parts and parts[0].lower() in self.model_map:
             target_model_alias = parts[0].lower()
             current_idx += 1
         
-        # 2. 检查预设参数
         if len(parts) > current_idx:
             possible_preset = parts[current_idx]
             if possible_preset in self.presets:
@@ -408,7 +632,7 @@ class GeminiDrawerPlugin(Star):
             
         is_daily_allowed, wait_time_str = self._check_daily_limit(user_id, target_model_alias)
         if not is_daily_allowed:
-            yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试喵。")
+            yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试。")
             return
         
         is_allowed, wait_seconds = self._check_quota(user_id, selected_model_name)
@@ -424,7 +648,9 @@ class GeminiDrawerPlugin(Star):
                 return
 
         mode = "图生图" if image_bytes_list else "文生图"
-        yield event.plain_result(f"OK，正在{mode} (模型: {target_model_alias}，预计消耗 {cost} 积分)...")
+        
+        if self.feedback_conf.get("draw_start", True):
+            yield event.plain_result(f"OK，正在{mode} (模型: {target_model_alias}，预计消耗 {cost} 积分)...")
         
         res = await self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt)
         
@@ -499,7 +725,7 @@ class GeminiDrawerPlugin(Star):
                     contents=[types.Content(role="user", parts=parts)],
                     config=generate_content_config,
                 )
-                if not response or not response.candidates: return "空回复，可能被审查喵。"
+                if not response or not response.candidates: return "空回复，可能被审查"
                 
                 if response.candidates:
                     for part in response.candidates[0].content.parts:
