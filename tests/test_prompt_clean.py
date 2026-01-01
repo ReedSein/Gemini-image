@@ -51,6 +51,20 @@ class PromptCleanTests(unittest.TestCase):
         out = GeminiDrawerPlugin._extract_user_text(event)
         self.assertEqual(out, "pro 手办化")
 
+    def test_match_preset_after_pro_and_at(self):
+        msg = "/imago pro @iva 元旦拼图男"
+        segments = [
+            Comp.Plain("/imago pro "),
+            Comp.At(qq="555", name="iva"),
+            Comp.Plain(" 元旦拼图男"),
+        ]
+        event = DummyEvent(msg, segments)
+        text = GeminiDrawerPlugin._extract_user_text(event)
+        plugin = GeminiDrawerPlugin.__new__(GeminiDrawerPlugin)
+        plugin.presets = {"元旦拼图男": "preset-body"}
+        name = plugin._match_preset_name(text.replace("pro ", "", 1).strip())
+        self.assertEqual(name, "元旦拼图男")
+
 
 if __name__ == "__main__":
     unittest.main()
