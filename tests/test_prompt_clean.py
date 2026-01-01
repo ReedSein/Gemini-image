@@ -40,6 +40,17 @@ class PromptCleanTests(unittest.TestCase):
         out = GeminiDrawerPlugin._extract_user_text(event)
         self.assertTrue(out.startswith("pro "))
 
+    def test_remove_display_name_without_at_symbol(self):
+        msg = "/imago pro @iva 手办化"
+        segments = [
+            Comp.Plain("/imago pro "),
+            Comp.At(qq="555", name="AI Iva（内部测试版）"),
+            Comp.Plain(" AI Iva（内部测试版） 手办化"),
+        ]
+        event = DummyEvent(msg, segments)
+        out = GeminiDrawerPlugin._extract_user_text(event)
+        self.assertEqual(out, "pro 手办化")
+
 
 if __name__ == "__main__":
     unittest.main()
