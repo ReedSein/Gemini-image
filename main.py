@@ -24,6 +24,9 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
+from data.plugins.astrbot_plugin_gemini_image_generation.tl.tl_utils import (
+    download_qq_avatar,
+)
 
 # --- Chromatics 古典风格模板 (v3.6.0 稳健渲染版) ---
 # 采用 TRPG 插件的 fit-content 布局，完美适配各种分辨率
@@ -211,6 +214,7 @@ CHROMATICS_TEMPLATE = """
             <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图 (支持中英文)</span></li>
             <li><strong>/imago &lt;Preset&gt;</strong> <span>使用预设风格 (如: 手办化)</span></li>
             <li><strong>/imago pro ...</strong> <span>强制使用高阶 Pro 模型</span></li>
+            <li><strong>/imago @好友 ...</strong> <span>引用其头像做图生图，预设与自定义提示可叠加</span></li>
             {% if economy.enabled %}
             <li><strong>/签到</strong> <span>每日获取灵感点数</span></li>
             <li><strong>/积分</strong> <span>查询当前余额</span></li>
@@ -684,6 +688,9 @@ class GeminiDrawerPlugin(Star):
             return
         
         raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
+        # 移除文本中的 @token，避免污染提示词
+        tokens = [tok for tok in raw_content.split() if not tok.startswith("@")]
+        raw_content = " ".join(tokens)
         
         if raw_content == "list":
             async for item in self.subrosa_imago(event):
@@ -710,6 +717,10 @@ class GeminiDrawerPlugin(Star):
         selected_model_name = self.model_map.get(target_model_alias, self.model_map["flash"])
         user_id = event.get_sender_id()
         image_bytes_list = await self.iwf.extract_image_from_event(event)
+        if not image_bytes_list:
+            avatar_refs = await self._get_avatar_references(event)
+            if avatar_refs:
+                image_bytes_list.extend(avatar_refs)
 
         if not image_bytes_list and not user_prompt and not preset_prompt:
             yield event.plain_result("请提供文字描述、预设名或图片。")
@@ -776,7 +787,9 @@ class GeminiDrawerPlugin(Star):
         system_instruction = self.conf.get("system_instruction", "")
         
         final_prompt = ""
-        if preset_prompt:
+        if preset_prompt and user_prompt:
+            final_prompt = f"{base_prompt}\n\nUser Request: {preset_prompt}\nAdditional Detail: {user_prompt}\n"
+        elif preset_prompt:
             final_prompt = f"{base_prompt}\n\nUser Request: {preset_prompt}\n"
         else:
             final_prompt = f"{base_prompt}\n\nUser Request: {user_prompt}\n"
@@ -826,6 +839,35 @@ class GeminiDrawerPlugin(Star):
 
         result = await self._with_retry(generation_operation)
         return result if isinstance(result, (bytes, str)) else "所有重试均失败。"
+
+    async def _get_avatar_references(self, event: AstrMessageEvent) -> list[bytes]:
+        """根据 @ 提取头像，供图生图参考"""
+        refs: list[bytes] = []
+        try:
+            mentioned_ids: list[str] = []
+            for seg in event.message_obj.message:
+                if isinstance(seg, Comp.At):
+                    seg_id = str(getattr(seg, "qq", "") or "")
+                    if seg_id and seg_id != str(event.get_self_id()):
+                        mentioned_ids.append(seg_id)
+            if not mentioned_ids:
+                return refs
+
+            # 限制最多取两张头像，避免无谓消耗
+            for seg_id in mentioned_ids[:2]:
+                try:
+                    b64_data = await download_qq_avatar(seg_id, f"imago_avatar_{seg_id}", event=event)
+                    if not b64_data:
+                        continue
+                    payload = b64_data.split(",", 1)[-1]
+                    avatar_bytes = base64.b64decode(payload)
+                    if avatar_bytes:
+                        refs.append(avatar_bytes)
+                except Exception as e:
+                    logger.warning(f"获取头像失败({seg_id}): {e}")
+        except Exception as e:
+            logger.warning(f"解析 @ 用户头像时出错: {e}")
+        return refs
 
     async def _with_retry(self, operation, *args, **kwargs):
         for attempt in range(self.max_retries + 1):
