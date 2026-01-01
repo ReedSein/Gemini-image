@@ -686,7 +686,19 @@ class GeminiDrawerPlugin(Star):
         if not self.is_initialized:
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
-        
+        # 先基于原始字符串提取模型别名，避免 @ 清理后丢失
+        raw_after_cmd = re.sub(
+            r"^[\/&!#]?(imago|draw|生成|画图)\s*",
+            "",
+            event.message_obj.message_str,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+        candidate_tokens = raw_after_cmd.split()
+        target_model_alias = "flash"
+        if candidate_tokens and candidate_tokens[0].lower() in self.model_map:
+            target_model_alias = candidate_tokens[0].lower()
+
         raw_content = self._extract_user_text(event)
         
         if raw_content == "list":
@@ -695,11 +707,12 @@ class GeminiDrawerPlugin(Star):
             return
 
         parts = raw_content.split()
-        target_model_alias = "flash"
         preset_prompt = None
         current_idx = 0
         
-        if parts and parts[0].lower() in self.model_map:
+        if parts and parts[0].lower() == target_model_alias:
+            current_idx += 1
+        elif parts and parts[0].lower() in self.model_map:
             target_model_alias = parts[0].lower()
             current_idx += 1
         
