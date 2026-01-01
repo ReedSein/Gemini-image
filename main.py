@@ -930,9 +930,14 @@ class GeminiDrawerPlugin(Star):
         """
         try:
             plain_parts: list[str] = []
+            at_names: list[str] = []
             for seg in getattr(event.message_obj, "message", []):
                 if isinstance(seg, Comp.Plain):
                     plain_parts.append(seg.text)
+                elif isinstance(seg, Comp.At):
+                    name = getattr(seg, "name", "") or ""
+                    if name:
+                        at_names.append(name)
                 # 忽略 @ / Reply 内容
             text = "".join(plain_parts).strip() if plain_parts else getattr(event.message_obj, "message_str", "")
         except Exception:
@@ -942,6 +947,21 @@ class GeminiDrawerPlugin(Star):
         text = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", text, count=1, flags=re.IGNORECASE)
         # 移除 @提及及其展示名（含中英文括号）
         text = re.sub(r"[@＠][^\s（()]+(?:[（(][^）)]*[）)])?", " ", text)
+        if at_names:
+            for name in at_names:
+                clean_name = name.strip()
+                if not clean_name:
+                    continue
+                # 移除原始显示名
+                text = text.replace(clean_name, " ")
+                # 移除去括号后的显示名
+                simplified = re.sub(r"[（(].*?[）)]", "", clean_name).strip()
+                if simplified and simplified != clean_name:
+                    text = text.replace(simplified, " ")
+                # 移除带 @ 的显示名
+                text = text.replace(f"@{clean_name}", " ")
+                if simplified:
+                    text = text.replace(f"@{simplified}", " ")
         # 压缩空白
         text = re.sub(r"\s+", " ", text).strip()
         return text
