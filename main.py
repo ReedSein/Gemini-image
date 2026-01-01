@@ -339,6 +339,7 @@ class GeminiDrawerPlugin(Star):
         
         self.proxy_url = self.conf.get("proxy_url", "")
         self.admin_id = self.conf.get("admin_id", "")
+        self.generation_timeout = self.conf.get("generation_timeout_seconds", 90)
         
         # --- 交互反馈配置 ---
         self.feedback_conf = self.conf.get("feedback", {})
@@ -757,8 +758,16 @@ class GeminiDrawerPlugin(Star):
             return
 
         await self.gen_lock.acquire()
+        res = None
         try:
-            res = await self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt)
+            # 超时保护，避免长时间占用队列
+            res = await asyncio.wait_for(
+                self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt),
+                timeout=float(max(10, self.generation_timeout)),
+            )
+        except asyncio.TimeoutError:
+            yield event.plain_result("生成耗时过长，已终止，请稍后再试。")
+            res = None
         finally:
             if self.gen_lock.locked():
                 self.gen_lock.release()
