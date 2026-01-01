@@ -687,10 +687,7 @@ class GeminiDrawerPlugin(Star):
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
         
-        raw_content = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", event.message_obj.message_str, count=1, flags=re.IGNORECASE).strip()
-        # 移除文本中的 @token，避免污染提示词
-        tokens = [tok for tok in raw_content.split() if not tok.startswith("@")]
-        raw_content = " ".join(tokens)
+        raw_content = self._extract_user_text(event)
         
         if raw_content == "list":
             async for item in self.subrosa_imago(event):
@@ -912,6 +909,29 @@ class GeminiDrawerPlugin(Star):
                 else:
                     return str(e)
         return "未知错误。"
+
+    @staticmethod
+    def _extract_user_text(event: AstrMessageEvent) -> str:
+        """
+        提取用户输入（移除指令前缀与@昵称），避免将@显示名带入提示词
+        """
+        try:
+            plain_parts: list[str] = []
+            for seg in getattr(event.message_obj, "message", []):
+                if isinstance(seg, Comp.Plain):
+                    plain_parts.append(seg.text)
+                # 忽略 @ / Reply 内容
+            text = "".join(plain_parts).strip() if plain_parts else getattr(event.message_obj, "message_str", "")
+        except Exception:
+            text = getattr(event.message_obj, "message_str", "") or ""
+
+        # 去掉指令前缀
+        text = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", text, count=1, flags=re.IGNORECASE)
+        # 移除 @提及及其展示名（含中英文括号）
+        text = re.sub(r"[@＠][^\s（()]+(?:[（(][^）)]*[）)])?", " ", text)
+        # 压缩空白
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
 
     async def terminate(self):
         if self.iwf: await self.iwf.terminate()
