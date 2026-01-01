@@ -65,6 +65,18 @@ class PromptCleanTests(unittest.TestCase):
         name = plugin._match_preset_name(text.replace("pro ", "", 1).strip())
         self.assertEqual(name, "元旦拼图男")
 
+    def test_match_preset_with_leading_punct(self):
+        msg = "/imago pro （元旦拼图男）"
+        segments = [Comp.Plain(msg)]
+        event = DummyEvent(msg, segments)
+        text = GeminiDrawerPlugin._extract_user_text(event)
+        plugin = GeminiDrawerPlugin.__new__(GeminiDrawerPlugin)
+        plugin.presets = {"元旦拼图男": "preset-body"}
+        # remove alias manually for matching scenario
+        cleaned = re.sub(r"^pro\s*", "", text, flags=re.IGNORECASE)
+        name = plugin._match_preset_name(cleaned)
+        self.assertEqual(name, "元旦拼图男")
+
 
 if __name__ == "__main__":
     unittest.main()
