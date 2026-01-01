@@ -970,6 +970,8 @@ class GeminiDrawerPlugin(Star):
         """在文本开头匹配预设名（支持中英文标点分隔）"""
         if not text:
             return None
+        # 清理前导空白/标点，防止残留符号阻断匹配
+        text = re.sub(r"^[\s，,。.!！？；;:：“”\"'‘’（）()【】《》]+", "", text)
         candidates = []
         for name in self.presets.keys():
             pattern = rf"^{re.escape(name)}(?:\s|[，,。.!！？；;:：]|$)"
@@ -982,7 +984,8 @@ class GeminiDrawerPlugin(Star):
     @staticmethod
     def _strip_preset_from_text(text: str, preset_name: str) -> str:
         """从文本开头移除预设名及其分隔符"""
-        pattern = rf"^{re.escape(preset_name)}(?:\s|[，,。.!！？；;:：]|$)+"
+        text = re.sub(r"^[\s，,。.!！？；;:：“”\"'‘’（）()【】《》]+", "", text)
+        pattern = rf"^{re.escape(preset_name)}(?:\s|[，,。.!！？；;:：“”\"'‘’（）()【】《》]|$)+"
         stripped = re.sub(pattern, "", text, count=1).strip()
         return stripped
 
