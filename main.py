@@ -694,10 +694,11 @@ class GeminiDrawerPlugin(Star):
             count=1,
             flags=re.IGNORECASE,
         ).strip()
-        candidate_tokens = raw_after_cmd.split()
+        normalized_cmd = re.sub(r"\s+", " ", raw_after_cmd).strip()
         target_model_alias = "flash"
-        if candidate_tokens and candidate_tokens[0].lower() in self.model_map:
-            target_model_alias = candidate_tokens[0].lower()
+        alias_match = re.match(r"^(pro|flash)\b", normalized_cmd, flags=re.IGNORECASE)
+        if alias_match:
+            target_model_alias = alias_match.group(1).lower()
 
         raw_content = self._extract_user_text(event)
         
@@ -706,23 +707,22 @@ class GeminiDrawerPlugin(Star):
                 yield item
             return
 
-        parts = raw_content.split()
+        # 移除模型别名前缀，避免进入提示词
+        if raw_content.lower().startswith(target_model_alias):
+            raw_content = re.sub(
+                rf"^{re.escape(target_model_alias)}(\s+|$)",
+                "",
+                raw_content,
+                flags=re.IGNORECASE,
+            ).strip()
+
         preset_prompt = None
-        current_idx = 0
-        
-        if parts and parts[0].lower() == target_model_alias:
-            current_idx += 1
-        elif parts and parts[0].lower() in self.model_map:
-            target_model_alias = parts[0].lower()
-            current_idx += 1
-        
-        if len(parts) > current_idx:
-            possible_preset = parts[current_idx]
-            if possible_preset in self.presets:
-                preset_prompt = self.presets[possible_preset]
-                current_idx += 1
-        
-        user_prompt = " ".join(parts[current_idx:])
+        user_prompt = raw_content
+        if raw_content:
+            preset_name = self._match_preset_name(raw_content)
+            if preset_name:
+                preset_prompt = self.presets[preset_name]
+                user_prompt = self._strip_preset_from_text(raw_content, preset_name)
         
         selected_model_name = self.model_map.get(target_model_alias, self.model_map["flash"])
         user_id = event.get_sender_id()
@@ -965,6 +965,26 @@ class GeminiDrawerPlugin(Star):
         # 压缩空白
         text = re.sub(r"\s+", " ", text).strip()
         return text
+
+    def _match_preset_name(self, text: str) -> str | None:
+        """在文本开头匹配预设名（支持中英文标点分隔）"""
+        if not text:
+            return None
+        candidates = []
+        for name in self.presets.keys():
+            pattern = rf"^{re.escape(name)}(?:\s|[，,。.!！？；;:：]|$)"
+            if re.match(pattern, text):
+                candidates.append(name)
+        if not candidates:
+            return None
+        return max(candidates, key=len)
+
+    @staticmethod
+    def _strip_preset_from_text(text: str, preset_name: str) -> str:
+        """从文本开头移除预设名及其分隔符"""
+        pattern = rf"^{re.escape(preset_name)}(?:\s|[，,。.!！？；;:：]|$)+"
+        stripped = re.sub(pattern, "", text, count=1).strip()
+        return stripped
 
     async def terminate(self):
         if self.iwf: await self.iwf.terminate()
