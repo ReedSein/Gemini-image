@@ -208,11 +208,11 @@ CHROMATICS_TEMPLATE = """
         <!-- 1. 指令帮助 -->
         <h2>Ordinances (指令)</h2>
         <ul>
+            <li><strong>/imago [pro|flash] [@好友] [预设] [提示词]</strong> <span>语法优先级：模型→@→预设→提示</span></li>
             <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图 (支持中英文)</span></li>
-            <li><strong>/imago &lt;Preset&gt;</strong> <span>使用预设风格 (如: 手办化)</span></li>
-            <li><strong>/imago pro &lt;...&gt;</strong> <span>高阶 Pro 模型，后接提示/预设</span></li>
-            <li><strong>/imago pro @好友 ...</strong> <span>高阶模型+好友头像引用，可叠加预设与自定义提示</span></li>
-            <li><strong>/imago @好友 ...</strong> <span>Flash 模型引用头像做图，预设与自定义提示可叠加</span></li>
+            <li><strong>/imago &lt;Preset&gt; [&lt;Prompt&gt;]</strong> <span>预设可叠加自定义提示 (如: 手办化 漂亮)</span></li>
+            <li><strong>/imago pro [@好友] ...</strong> <span>高阶 Pro 模型，可叠加预设与自定义提示</span></li>
+            <li><strong>/imago [@好友] ...</strong> <span>Flash 模型引用头像做图</span></li>
             {% if economy.enabled %}
             <li><strong>/签到</strong> <span>每日获取灵感点数</span></li>
             <li><strong>/积分</strong> <span>查询当前余额</span></li>
@@ -686,43 +686,18 @@ class GeminiDrawerPlugin(Star):
         if not self.is_initialized:
             yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
-        # 先基于原始字符串提取模型别名，避免 @ 清理后丢失
-        raw_after_cmd = re.sub(
-            r"^[\/&!#]?(imago|draw|生成|画图)\s*",
-            "",
-            event.message_obj.message_str,
-            count=1,
-            flags=re.IGNORECASE,
-        ).strip()
-        normalized_cmd = re.sub(r"\s+", " ", raw_after_cmd).strip()
-        target_model_alias = "flash"
-        alias_match = re.match(r"^(pro|flash)\b", normalized_cmd, flags=re.IGNORECASE)
-        if alias_match:
-            target_model_alias = alias_match.group(1).lower()
 
-        raw_content = self._extract_user_text(event)
-        
-        if raw_content == "list":
+        parse_result = self._parse_imago_input(event)
+        target_model_alias = parse_result["model_alias"]
+        preset_name = parse_result["preset_name"]
+        user_prompt = parse_result["user_prompt"]
+
+        if parse_result["raw_text"].lower() == "list":
             async for item in self.subrosa_imago(event):
                 yield item
             return
 
-        # 移除模型别名前缀，避免进入提示词
-        if raw_content.lower().startswith(target_model_alias):
-            raw_content = re.sub(
-                rf"^{re.escape(target_model_alias)}(\s+|$)",
-                "",
-                raw_content,
-                flags=re.IGNORECASE,
-            ).strip()
-
-        preset_prompt = None
-        user_prompt = raw_content
-        if raw_content:
-            preset_name = self._match_preset_name(raw_content)
-            if preset_name:
-                preset_prompt = self.presets[preset_name]
-                user_prompt = self._strip_preset_from_text(raw_content, preset_name)
+        preset_prompt = self.presets[preset_name] if preset_name else None
         
         selected_model_name = self.model_map.get(target_model_alias, self.model_map["flash"])
         user_id = event.get_sender_id()
@@ -924,7 +899,28 @@ class GeminiDrawerPlugin(Star):
         return "未知错误。"
 
     @staticmethod
-    def _extract_user_text(event: AstrMessageEvent) -> str:
+    def _strip_command_prefix(text: str) -> str:
+        return re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", text, count=1, flags=re.IGNORECASE)
+
+    @staticmethod
+    def _strip_at_tokens(text: str, at_names: list[str]) -> str:
+        text = re.sub(r"\[At:\d+\]", " ", text, flags=re.IGNORECASE)
+        text = re.sub(r"\[CQ:at,[^\]]+\]", " ", text, flags=re.IGNORECASE)
+        for name in at_names:
+            clean_name = name.strip()
+            if not clean_name:
+                continue
+            text = text.replace(clean_name, " ")
+            simplified = re.sub(r"[（(].*?[）)]", "", clean_name).strip()
+            if simplified and simplified != clean_name:
+                text = text.replace(simplified, " ")
+            text = text.replace(f"@{clean_name}", " ")
+            if simplified:
+                text = text.replace(f"@{simplified}", " ")
+        return text
+
+    @staticmethod
+    def _extract_text_without_command_and_mentions(event: AstrMessageEvent) -> str:
         """
         提取用户输入（移除指令前缀与@昵称），避免将@显示名带入提示词
         """
@@ -938,33 +934,44 @@ class GeminiDrawerPlugin(Star):
                     name = getattr(seg, "name", "") or ""
                     if name:
                         at_names.append(name)
-                # 忽略 @ / Reply 内容
             text = "".join(plain_parts).strip() if plain_parts else getattr(event.message_obj, "message_str", "")
         except Exception:
             text = getattr(event.message_obj, "message_str", "") or ""
 
-        # 去掉指令前缀
-        text = re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", text, count=1, flags=re.IGNORECASE)
-        # 移除 @提及及其展示名（含中英文括号）
-        text = re.sub(r"[@＠][^\s（()]+(?:[（(][^）)]*[）)])?", " ", text)
-        if at_names:
-            for name in at_names:
-                clean_name = name.strip()
-                if not clean_name:
-                    continue
-                # 移除原始显示名
-                text = text.replace(clean_name, " ")
-                # 移除去括号后的显示名
-                simplified = re.sub(r"[（(].*?[）)]", "", clean_name).strip()
-                if simplified and simplified != clean_name:
-                    text = text.replace(simplified, " ")
-                # 移除带 @ 的显示名
-                text = text.replace(f"@{clean_name}", " ")
-                if simplified:
-                    text = text.replace(f"@{simplified}", " ")
+        text = GeminiDrawerPlugin._strip_command_prefix(text)
+        text = GeminiDrawerPlugin._strip_at_tokens(text, at_names)
         # 压缩空白
         text = re.sub(r"\s+", " ", text).strip()
         return text
+
+    def _parse_imago_input(self, event: AstrMessageEvent) -> dict:
+        """
+        解析 /imago 指令文本，支持：
+        /imago [pro|flash] [@目标] [预设名] [自定义提示词]
+        """
+        raw_text = self._extract_text_without_command_and_mentions(event)
+        normalized = re.sub(r"\s+", " ", raw_text).strip()
+
+        model_alias = "flash"
+        if normalized:
+            alias_match = re.match(r"^(pro|flash)\b", normalized, flags=re.IGNORECASE)
+            if alias_match:
+                model_alias = alias_match.group(1).lower()
+                normalized = normalized[alias_match.end():].strip()
+
+        preset_name = None
+        user_prompt = normalized
+        if normalized:
+            preset_name = self._match_preset_name(normalized)
+            if preset_name:
+                user_prompt = self._strip_preset_from_text(normalized, preset_name)
+
+        return {
+            "model_alias": model_alias,
+            "preset_name": preset_name,
+            "user_prompt": user_prompt,
+            "raw_text": normalized,
+        }
 
     def _match_preset_name(self, text: str) -> str | None:
         """在文本开头匹配预设名（支持中英文标点分隔）"""
