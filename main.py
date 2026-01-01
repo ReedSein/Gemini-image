@@ -24,9 +24,6 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.message.components import Image, Plain
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
-from data.plugins.astrbot_plugin_gemini_image_generation.tl.tl_utils import (
-    download_qq_avatar,
-)
 
 # --- Chromatics 古典风格模板 (v3.6.0 稳健渲染版) ---
 # 采用 TRPG 插件的 fit-content 布局，完美适配各种分辨率
@@ -213,8 +210,9 @@ CHROMATICS_TEMPLATE = """
         <ul>
             <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图 (支持中英文)</span></li>
             <li><strong>/imago &lt;Preset&gt;</strong> <span>使用预设风格 (如: 手办化)</span></li>
-            <li><strong>/imago pro ...</strong> <span>强制使用高阶 Pro 模型</span></li>
-            <li><strong>/imago @好友 ...</strong> <span>引用其头像做图生图，预设与自定义提示可叠加</span></li>
+            <li><strong>/imago pro &lt;...&gt;</strong> <span>高阶 Pro 模型，后接提示/预设</span></li>
+            <li><strong>/imago pro @好友 ...</strong> <span>高阶模型+好友头像引用，可叠加预设与自定义提示</span></li>
+            <li><strong>/imago @好友 ...</strong> <span>Flash 模型引用头像做图，预设与自定义提示可叠加</span></li>
             {% if economy.enabled %}
             <li><strong>/签到</strong> <span>每日获取灵感点数</span></li>
             <li><strong>/积分</strong> <span>查询当前余额</span></li>
@@ -856,11 +854,7 @@ class GeminiDrawerPlugin(Star):
             # 限制最多取两张头像，避免无谓消耗
             for seg_id in mentioned_ids[:2]:
                 try:
-                    b64_data = await download_qq_avatar(seg_id, f"imago_avatar_{seg_id}", event=event)
-                    if not b64_data:
-                        continue
-                    payload = b64_data.split(",", 1)[-1]
-                    avatar_bytes = base64.b64decode(payload)
+                    avatar_bytes = await self._download_avatar_bytes(seg_id)
                     if avatar_bytes:
                         refs.append(avatar_bytes)
                 except Exception as e:
@@ -868,6 +862,24 @@ class GeminiDrawerPlugin(Star):
         except Exception as e:
             logger.warning(f"解析 @ 用户头像时出错: {e}")
         return refs
+
+    async def _download_avatar_bytes(self, user_id: str) -> bytes | None:
+        """简化版头像获取：使用 qlogo 直链，失败则返回 None"""
+        try:
+            url = f"http://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
+            timeout = aiohttp.ClientTimeout(total=8, connect=4)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=timeout) as resp:
+                    if resp.status != 200:
+                        logger.debug(f"头像拉取失败 HTTP{resp.status}")
+                        return None
+                    data = await resp.read()
+                    if not data or len(data) < 1000:
+                        return None
+                    return data
+        except Exception as e:
+            logger.debug(f"头像下载异常: {e}")
+            return None
 
     async def _with_retry(self, operation, *args, **kwargs):
         for attempt in range(self.max_retries + 1):
