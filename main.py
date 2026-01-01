@@ -910,13 +910,16 @@ class GeminiDrawerPlugin(Star):
             clean_name = name.strip()
             if not clean_name:
                 continue
-            text = text.replace(clean_name, " ")
             simplified = re.sub(r"[（(].*?[）)]", "", clean_name).strip()
-            if simplified and simplified != clean_name:
-                text = text.replace(simplified, " ")
+            escaped_name = re.escape(clean_name)
+            text = re.sub(rf"@{escaped_name}[（(][^）)]*[）)]", " ", text)
             text = text.replace(f"@{clean_name}", " ")
-            if simplified:
+            text = text.replace(clean_name, " ")
+            if simplified and simplified != clean_name:
+                escaped_simplified = re.escape(simplified)
+                text = re.sub(rf"@{escaped_simplified}[（(][^）)]*[）)]", " ", text)
                 text = text.replace(f"@{simplified}", " ")
+                text = text.replace(simplified, " ")
         return text
 
     @staticmethod
@@ -925,21 +928,20 @@ class GeminiDrawerPlugin(Star):
         提取用户输入（移除指令前缀与@昵称），避免将@显示名带入提示词
         """
         try:
-            plain_parts: list[str] = []
             at_names: list[str] = []
             for seg in getattr(event.message_obj, "message", []):
-                if isinstance(seg, Comp.Plain):
-                    plain_parts.append(seg.text)
-                elif isinstance(seg, Comp.At):
+                if isinstance(seg, Comp.At):
                     name = getattr(seg, "name", "") or ""
                     if name:
                         at_names.append(name)
-            text = "".join(plain_parts).strip() if plain_parts else getattr(event.message_obj, "message_str", "")
+            text = event.get_message_str() or getattr(event.message_obj, "message_str", "")
         except Exception:
             text = getattr(event.message_obj, "message_str", "") or ""
 
         text = GeminiDrawerPlugin._strip_command_prefix(text)
         text = GeminiDrawerPlugin._strip_at_tokens(text, at_names)
+        # 移除纯文本中的 @ 提及（包括昵称与可选ID）
+        text = re.sub(r"[@＠][^\s（()]+(?:[（(][^）)]*[）)])?", " ", text)
         # 压缩空白
         text = re.sub(r"\s+", " ", text).strip()
         return text
