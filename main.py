@@ -390,6 +390,7 @@ class GeminiDrawerPlugin(Star):
         }
         self.default_rpm = 5
         self.usage_history = defaultdict(lambda: defaultdict(deque))
+        self.gen_lock = asyncio.Lock()
         
         # --- 预设加载 (支持 \n 换行) ---
         self.presets = {}
@@ -751,7 +752,16 @@ class GeminiDrawerPlugin(Star):
             except Exception:
                 yield event.plain_result(f"OK，正在{mode}...")
         
-        res = await self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt)
+        if self.gen_lock.locked():
+            yield event.plain_result("正在生成中，请稍等，当前有人在使用。")
+            return
+
+        await self.gen_lock.acquire()
+        try:
+            res = await self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt)
+        finally:
+            if self.gen_lock.locked():
+                self.gen_lock.release()
         
         if isinstance(res, bytes):
             if self.enable_economy and cost > 0:
