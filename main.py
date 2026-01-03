@@ -734,6 +734,7 @@ class GeminiDrawerPlugin(Star):
         target_model_alias = parse_result["model_alias"]
         preset_name = parse_result["preset_name"]
         user_prompt = parse_result["user_prompt"]
+        incantation = bool(event.get_extra("incantation_command", False))
 
         if parse_result["raw_text"].lower() == "list":
             async for item in self.subrosa_imago(event):
@@ -744,6 +745,7 @@ class GeminiDrawerPlugin(Star):
         
         selected_model_name = self.model_map.get(target_model_alias, self.model_map["flash"])
         user_id = event.get_sender_id()
+        quota_user_id = f"incantation:{user_id}" if incantation else user_id
         image_bytes_list = await self.iwf.extract_image_from_event(event)
         if not image_bytes_list:
             avatar_refs = await self._get_avatar_references(event)
@@ -754,22 +756,30 @@ class GeminiDrawerPlugin(Star):
             yield event.plain_result("请提供文字描述、预设名或图片。")
             return
             
-        is_daily_allowed, wait_time_str = self._check_daily_limit(user_id, target_model_alias)
-        if not is_daily_allowed:
-            yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试。")
-            return
-        
-        is_allowed, wait_seconds = self._check_quota(user_id, selected_model_name)
-        if not is_allowed:
-            yield event.plain_result(f"请求太快了！\n请在 {wait_seconds} 秒后重试")
-            return
+        if not incantation:
+            is_daily_allowed, wait_time_str = self._check_daily_limit(
+                quota_user_id,
+                target_model_alias,
+            )
+            if not is_daily_allowed:
+                yield event.plain_result(f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试。")
+                return
+            
+            is_allowed, wait_seconds = self._check_quota(
+                quota_user_id,
+                selected_model_name,
+            )
+            if not is_allowed:
+                yield event.plain_result(f"请求太快了！\n请在 {wait_seconds} 秒后重试")
+                return
 
         cost = 0
         if self.enable_economy:
-            cost = self.eco_conf.get(f"cost_{target_model_alias}", 0)
-            if not self._check_balance(user_id, cost):
-                yield event.plain_result(f"💸 积分不足！\n{target_model_alias} 模型需 {cost} 积分，当前余额 {self._get_points(user_id)}。\n请发送 /签到 或使用 /兑换码")
-                return
+            if not incantation:
+                cost = self.eco_conf.get(f"cost_{target_model_alias}", 0)
+                if not self._check_balance(user_id, cost):
+                    yield event.plain_result(f"💸 积分不足！\n{target_model_alias} 模型需 {cost} 积分，当前余额 {self._get_points(user_id)}。\n请发送 /签到 或使用 /兑换码")
+                    return
 
         mode = "图生图" if image_bytes_list else "文生图"
         
@@ -801,9 +811,9 @@ class GeminiDrawerPlugin(Star):
                 self.gen_lock.release()
         
         if isinstance(res, bytes):
-            if self.enable_economy and cost > 0:
+            if self.enable_economy and cost > 0 and not incantation:
                 self._deduct_points(user_id, cost)
-            self._increment_daily_usage(user_id, target_model_alias)
+            self._increment_daily_usage(quota_user_id, target_model_alias)
             
             msg_chain = [Image.fromBytes(res)]
             if self.enable_economy and cost > 0:
