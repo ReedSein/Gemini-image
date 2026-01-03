@@ -71,6 +71,12 @@
         "type": "bool",
         "default": true
     },
+    "incantation_fallback_reply": {
+        "description": "咒语生图失败兜底回复",
+        "type": "string",
+        "hint": "当咒语触发生图失败时发送的兜底文本（前台不输出其它提示）。",
+        "default": "咒语生图失败，请稍后再试。"
+    },
     "proxy_enabled": {
         "description": "是否启用代理",
         "type": "bool",
