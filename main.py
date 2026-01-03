@@ -121,20 +121,44 @@ CHROMATICS_TEMPLATE = """
 
     li {
         margin-bottom: 15px;
-        font-size: 20px;
+        font-size: 16px;
         line-height: 1.6;
-        display: flex;
-        align-items: baseline;
         border-bottom: 1px dashed rgba(92, 75, 55, 0.2);
-        padding-bottom: 8px;
+        padding-bottom: 12px;
+        display: block;
     }
 
     li strong {
         color: #8b0000;
         font-weight: 700;
-        margin-right: 15px;
-        min-width: 220px;
+        margin-bottom: 6px;
+        display: inline-block;
         font-family: 'Courier New', monospace; /* 等宽字体显示指令 */
+        font-size: 20px;
+    }
+
+    li .desc {
+        display: block;
+        margin-top: 4px;
+        color: #4a3b2a;
+        padding-left: 10px;
+    }
+
+    li .param {
+        background: rgba(139, 0, 0, 0.1);
+        padding: 0 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.9em;
+        margin-right: 4px;
+    }
+
+    li code {
+        background: rgba(0, 0, 0, 0.05);
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        color: #8b0000;
     }
 
     .info-grid {
@@ -180,12 +204,12 @@ CHROMATICS_TEMPLATE = """
         background: #fff;
         border: 2px solid #8b0000;
         color: #8b0000;
-        padding: 8px 16px;
-        font-size: 16px;
+        padding: 6px 14px;
+        font-size: 15px;
         border-radius: 4px;
         text-transform: uppercase;
         font-weight: bold;
-        box-shadow: 3px 3px 0px rgba(139, 0, 0, 0.15);
+        box-shadow: 2px 2px 0px rgba(139, 0, 0, 0.15);
     }
 
     .footer {
@@ -206,49 +230,59 @@ CHROMATICS_TEMPLATE = """
         <div class="subtitle">The Artificer's Guide to Digital Manifestation</div>
 
         <!-- 1. 指令帮助 -->
-        <h2>Ordinances (指令)</h2>
+        <h2>Ordinances (指令法则)</h2>
         <ul>
-            <li><strong>/imago [pro|flash] [@好友] [预设] [提示词]</strong> <span>语法优先级：模型→@→预设→提示</span></li>
-            <li><strong>/imago &lt;Prompt&gt;</strong> <span>核心绘图 (支持中英文)</span></li>
-            <li><strong>/imago &lt;Preset&gt; [&lt;Prompt&gt;]</strong> <span>预设可叠加自定义提示 (如: 手办化 漂亮)</span></li>
-            <li><strong>/imago pro [@好友] ...</strong> <span>高阶 Pro 模型，可叠加预设与自定义提示</span></li>
-            <li><strong>/imago [@好友] ...</strong> <span>Flash 模型引用头像做图</span></li>
+            <li>
+                <strong>/imago <span class="param">[pro|flash]</span> <span class="param">[预设]</span> <span class="param">[提示词]</span></strong>
+                <div class="desc">
+                    ❖ <b>核心绘图</b>：支持别名 <code>/draw</code>, <code>/生成</code>, <code>/画图</code>。<br>
+                    ❖ <b>模型</b>：默认 <code>flash</code> (小香蕉，极速)；指定 <code>pro</code> 启用高画质模型 (大香蕉，消耗更高)。<br>
+                    ❖ <b>预设</b>：输入下方列表中的名称可自动应用风格 (如 <code>手办化</code>)。
+                </div>
+            </li>
+            <li>
+                <strong>图生图 / 垫图重绘 (Image-to-Image)</strong>
+                <div class="desc">
+                    ❖ <b>@用户</b>：指令中包含 <code>@某人</code>，将提取其头像作为底图。<br>
+                    ❖ <b>附图/回复</b>：发送指令时附带图片，或回复一张图片，即可进行参考重绘。<br>
+                    ❖ <b>混合</b>：例如 <code>/imago pro @用户 像素</code> (将用户头像转为像素风格)。
+                </div>
+            </li>
             {% if economy.enabled %}
-            <li><strong>/签到</strong> <span>每日获取灵感点数</span></li>
-            <li><strong>/积分</strong> <span>查询当前余额</span></li>
-            <li><strong>/兑换码 &lt;Code&gt;</strong> <span>使用密文兑换点数</span></li>
+            <li>
+                <strong>/签到</strong>
+                <div class="desc">每日祈愿，获取灵感点数 (随机 {{ economy.checkin_min }} ~ {{ economy.checkin_max }} pts)。</div>
+            </li>
+            <li>
+                <strong>/积分 & /兑换码 <span class="param">&lt;Code&gt;</span></strong>
+                <div class="desc">查询当前持有的灵感点数，或使用密文兑换点数。</div>
+            </li>
             {% endif %}
         </ul>
 
         <!-- 2. 经济与限制 -->
-        <h2>Limitations & Specie (法则)</h2>
+        <h2>Limitations & Specie (限制与经济)</h2>
         <div class="info-grid">
             <div class="info-box">
-                <div class="info-title">Flash Model</div>
+                <div class="info-title">Flash Model (小香蕉)</div>
                 <div class="info-value">
                     {% if economy.enabled %}Cost: {{ economy.cost_flash }}{% else %}Free{% endif %} 
                     <span style="font-size:16px; color:#666">/ Image</span>
                 </div>
-                <div class="info-sub">Daily Limit: {{ quota.flash }} | Rate: {{ rate.flash_rpm }} rpm</div>
+                <div class="info-sub">Daily: {{ quota.flash }} | Rate: {{ rate.flash_rpm }} rpm</div>
             </div>
             <div class="info-box">
-                <div class="info-title">Pro Model</div>
+                <div class="info-title">Pro Model (大香蕉)</div>
                 <div class="info-value">
                     {% if economy.enabled %}Cost: {{ economy.cost_pro }}{% else %}Free{% endif %}
                     <span style="font-size:16px; color:#666">/ Image</span>
                 </div>
-                <div class="info-sub">Daily Limit: {{ quota.pro }} | CD: {{ rate.pro_cooldown }}s</div>
+                <div class="info-sub">Daily: {{ quota.pro }} | CoolDown: {{ rate.pro_cooldown }}s</div>
             </div>
-            {% if economy.enabled %}
-            <div class="info-box" style="grid-column: span 2;">
-                <div class="info-title">Daily Blessing (Check-in)</div>
-                <div class="info-value">{{ economy.checkin_min }} - {{ economy.checkin_max }} Credits</div>
-            </div>
-            {% endif %}
         </div>
 
         <!-- 3. 预设列表 -->
-        <h2>Manifestations (预设)</h2>
+        <h2>Manifestations (风格预设)</h2>
         <div class="preset-container">
             {% for name in presets %}
             <span class="preset-tag">{{ name }}</span>
@@ -337,7 +371,9 @@ class GeminiDrawerPlugin(Star):
         self.plugin_data_dir = StarTools.get_data_dir("astrbot_plugin_gemini_drawer")
         self.plugin_data_dir.mkdir(parents=True, exist_ok=True)
         
+        self.proxy_enabled = bool(self.conf.get("proxy_enabled", True))
         self.proxy_url = self.conf.get("proxy_url", "")
+        self._proxy_env_enabled = False
         self.admin_id = self.conf.get("admin_id", "")
         self.generation_timeout = self.conf.get("generation_timeout_seconds", 90)
         
@@ -410,16 +446,23 @@ class GeminiDrawerPlugin(Star):
             logger.warning("未检测到任何风格预设，请在配置中添加。")
 
 
-    async def initialize(self):
-        self.iwf = ImageWorkflow(self.proxy_url)
-        
-        if self.proxy_url:
+    def _apply_proxy_env(self):
+        if self.proxy_enabled and self.proxy_url:
             os.environ["http_proxy"] = self.proxy_url
             os.environ["https_proxy"] = self.proxy_url
-        else:
-            # 清理环境变量，防止残留
-            os.environ.pop("http_proxy", None)
-            os.environ.pop("https_proxy", None)
+            self._proxy_env_enabled = True
+            return
+        self._clear_proxy_env()
+
+    def _clear_proxy_env(self):
+        os.environ.pop("http_proxy", None)
+        os.environ.pop("https_proxy", None)
+        self._proxy_env_enabled = False
+
+    async def initialize(self):
+        proxy_url = self.proxy_url if self.proxy_enabled else ""
+        self.iwf = ImageWorkflow(proxy_url or None)
+        self._apply_proxy_env()
             
         final_auth_path = None
         if self.auth_json_path and Path(self.auth_json_path).is_file():
@@ -1001,3 +1044,4 @@ class GeminiDrawerPlugin(Star):
     async def terminate(self):
         if self.iwf: await self.iwf.terminate()
         self.client = None # 释放 Client 引用
+        self._clear_proxy_env()
