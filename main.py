@@ -376,6 +376,10 @@ class GeminiDrawerPlugin(Star):
         self._proxy_env_enabled = False
         self.admin_id = self.conf.get("admin_id", "")
         self.generation_timeout = self.conf.get("generation_timeout_seconds", 90)
+        self.incantation_fallback_reply = self.conf.get(
+            "incantation_fallback_reply",
+            "咒语生图失败，请稍后再试。",
+        )
         
         # --- 交互反馈配置 ---
         self.feedback_conf = self.conf.get("feedback", {})
@@ -544,6 +548,12 @@ class GeminiDrawerPlugin(Star):
         if self.admin_id and str(user_id) == self.admin_id: return True
         if not self.enable_economy: return True
         return self._get_points(user_id) >= amount
+
+    def _incantation_fail_result(self, reason: str) -> MessageEventResult | None:
+        logger.warning(f"[GeminiDrawer] 咒语生图失败: {reason}")
+        if not self.incantation_fallback_reply:
+            return None
+        return MessageEventResult().message(self.incantation_fallback_reply)
 
     # ==========================
     #      配额管理方法
@@ -726,19 +736,32 @@ class GeminiDrawerPlugin(Star):
 
     @filter.command("imago", aliases={"draw", "生成", "画图"})
     async def on_imago(self, event: AstrMessageEvent):
+        incantation = bool(event.get_extra("incantation_command", False))
+        if incantation:
+            logger.info(
+                f"[GeminiDrawer] 🪄 咒语生图触发: {event.get_message_str()}",
+            )
+
         if not self.is_initialized:
-            yield event.plain_result("Vertex AI 未初始化，请检查配置。")
+            if incantation:
+                if res := self._incantation_fail_result("Vertex AI 未初始化"):
+                    yield res
+            else:
+                yield event.plain_result("Vertex AI 未初始化，请检查配置。")
             return
 
         parse_result = self._parse_imago_input(event)
         target_model_alias = parse_result["model_alias"]
         preset_name = parse_result["preset_name"]
         user_prompt = parse_result["user_prompt"]
-        incantation = bool(event.get_extra("incantation_command", False))
 
         if parse_result["raw_text"].lower() == "list":
-            async for item in self.subrosa_imago(event):
-                yield item
+            if incantation:
+                if res := self._incantation_fail_result("咒语指令请求列表"):
+                    yield res
+            else:
+                async for item in self.subrosa_imago(event):
+                    yield item
             return
 
         preset_prompt = self.presets[preset_name] if preset_name else None
@@ -753,7 +776,11 @@ class GeminiDrawerPlugin(Star):
                 image_bytes_list.extend(avatar_refs)
 
         if not image_bytes_list and not user_prompt and not preset_prompt:
-            yield event.plain_result("请提供文字描述、预设名或图片。")
+            if incantation:
+                if res := self._incantation_fail_result("缺少有效提示词或图片"):
+                    yield res
+            else:
+                yield event.plain_result("请提供文字描述、预设名或图片。")
             return
             
         if not incantation:
@@ -784,15 +811,20 @@ class GeminiDrawerPlugin(Star):
         mode = "图生图" if image_bytes_list else "文生图"
         
         if self.feedback_conf.get("draw_start", True):
-            template = self.feedback_conf.get("draw_start_text", "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...")
-            try:
-                msg = template.format(mode=mode, model=target_model_alias, cost=cost)
-                yield event.plain_result(msg)
-            except Exception:
-                yield event.plain_result(f"OK，正在{mode}...")
+            if not incantation:
+                template = self.feedback_conf.get("draw_start_text", "OK，正在{mode} (模型: {model}，预计消耗 {cost} 积分)...")
+                try:
+                    msg = template.format(mode=mode, model=target_model_alias, cost=cost)
+                    yield event.plain_result(msg)
+                except Exception:
+                    yield event.plain_result(f"OK，正在{mode}...")
         
         if self.gen_lock.locked():
-            yield event.plain_result("正在生成中，请稍等，当前有人在使用。")
+            if incantation:
+                if res := self._incantation_fail_result("生成锁被占用"):
+                    yield res
+            else:
+                yield event.plain_result("正在生成中，请稍等，当前有人在使用。")
             return
 
         await self.gen_lock.acquire()
@@ -804,7 +836,11 @@ class GeminiDrawerPlugin(Star):
                 timeout=float(max(10, self.generation_timeout)),
             )
         except asyncio.TimeoutError:
-            yield event.plain_result("生成耗时过长，已终止，请稍后再试。")
+            if incantation:
+                if res := self._incantation_fail_result("生成超时"):
+                    yield res
+            else:
+                yield event.plain_result("生成耗时过长，已终止，请稍后再试。")
             res = None
         finally:
             if self.gen_lock.locked():
@@ -820,6 +856,8 @@ class GeminiDrawerPlugin(Star):
                 msg_chain.append(Plain(f" | ✅ -{cost}积分"))
                 
             yield event.chain_result(msg_chain)
+            if incantation:
+                logger.info("[GeminiDrawer] ✅ 咒语生图成功")
             
             if self.save_image:
                 save_path = self.plugin_data_dir / f"gemini_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
@@ -828,7 +866,11 @@ class GeminiDrawerPlugin(Star):
                     with save_path.open("wb") as f: f.write(res)
                 await asyncio.to_thread(write_file)
         else:
-            yield event.plain_result(f"生成失败: {res}")
+            if incantation:
+                if res_msg := self._incantation_fail_result(f"生成失败: {res}"):
+                    yield res_msg
+            else:
+                yield event.plain_result(f"生成失败: {res}")
 
     async def _generate_image_with_gemini(
         self, model_name: str, image_bytes_list: list[bytes], user_prompt: str, preset_prompt: str | None = None
