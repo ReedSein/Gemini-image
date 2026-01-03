@@ -71,6 +71,11 @@
         "type": "bool",
         "default": true
     },
+    "proxy_enabled": {
+        "description": "是否启用代理",
+        "type": "bool",
+        "default": true
+    },
     "proxy_url": {
         "description": "代理地址",
         "type": "string",
