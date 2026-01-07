@@ -237,6 +237,7 @@ CHROMATICS_TEMPLATE = """
                 <div class="desc">
                     ❖ <b>核心绘图</b>：支持别名 <code>/draw</code>, <code>/生成</code>, <code>/画图</code>。<br>
                     ❖ <b>模型</b>：默认 <code>flash</code> (小香蕉，极速)；指定 <code>pro</code> 启用高画质模型 (大香蕉，消耗更高)。<br>
+                    ❖ <b>4K</b>：使用 <code>/eidos</code> 以 4K 分辨率生成（参数与 /imago 完全一致）。<br>
                     ❖ <b>预设</b>：输入下方列表中的名称可自动应用风格 (如 <code>手办化</code>)。
                 </div>
             </li>
@@ -734,8 +735,7 @@ class GeminiDrawerPlugin(Star):
         
         yield event.plain_result(f"🎉 兑换成功！获得 {amount} 积分。\n当前余额: {self._get_points(uid)}")
 
-    @filter.command("imago", aliases={"draw", "生成", "画图"})
-    async def on_imago(self, event: AstrMessageEvent):
+    async def _handle_imago_like(self, event: AstrMessageEvent, image_size: str):
         incantation = bool(event.get_extra("incantation_command", False))
         if incantation:
             logger.info(
@@ -832,7 +832,13 @@ class GeminiDrawerPlugin(Star):
         try:
             # 超时保护，避免长时间占用队列
             res = await asyncio.wait_for(
-                self._generate_image_with_gemini(selected_model_name, image_bytes_list, user_prompt, preset_prompt),
+                self._generate_image_with_gemini(
+                    selected_model_name,
+                    image_bytes_list,
+                    user_prompt,
+                    preset_prompt,
+                    image_size=image_size,
+                ),
                 timeout=float(max(10, self.generation_timeout)),
             )
         except asyncio.TimeoutError:
@@ -872,8 +878,23 @@ class GeminiDrawerPlugin(Star):
             else:
                 yield event.plain_result(f"生成失败: {res}")
 
+    @filter.command("imago", aliases={"draw", "生成", "画图"})
+    async def on_imago(self, event: AstrMessageEvent):
+        async for item in self._handle_imago_like(event, image_size="2K"):
+            yield item
+
+    @filter.command("eidos")
+    async def on_eidos(self, event: AstrMessageEvent):
+        async for item in self._handle_imago_like(event, image_size="4K"):
+            yield item
+
     async def _generate_image_with_gemini(
-        self, model_name: str, image_bytes_list: list[bytes], user_prompt: str, preset_prompt: str | None = None
+        self,
+        model_name: str,
+        image_bytes_list: list[bytes],
+        user_prompt: str,
+        preset_prompt: str | None = None,
+        image_size: str = "2K",
     ) -> bytes | str:
         prompts_config = self.conf.get("base_prompts", {})
         base_prompt = prompts_config.get(
@@ -907,7 +928,7 @@ class GeminiDrawerPlugin(Star):
                 types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"),
                 types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="OFF")
             ],
-            "image_config": types.ImageConfig(image_size="2K")
+            "image_config": types.ImageConfig(image_size=image_size)
         }
         
         if system_instruction:
@@ -995,7 +1016,13 @@ class GeminiDrawerPlugin(Star):
 
     @staticmethod
     def _strip_command_prefix(text: str) -> str:
-        return re.sub(r"^[\/&!#]?(imago|draw|生成|画图)\s*", "", text, count=1, flags=re.IGNORECASE)
+        return re.sub(
+            r"^[\/&!#]?(imago|eidos|draw|生成|画图)\s*",
+            "",
+            text,
+            count=1,
+            flags=re.IGNORECASE,
+        )
 
     @staticmethod
     def _strip_at_tokens(text: str, at_names: list[str]) -> str:
