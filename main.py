@@ -244,7 +244,7 @@ CHROMATICS_TEMPLATE = """
                 <strong>图生图 / 垫图重绘 (Image-to-Image)</strong>
                 <div class="desc">
                     ❖ <b>@用户</b>：指令中包含 <code>@某人</code>，将提取其头像作为底图。<br>
-                    ❖ <b>附图/回复</b>：发送指令时附带图片，或回复一张图片，即可进行参考重绘。<br>
+                    ❖ <b>附图/回复</b>：发送指令时附带或回复图片(均支持多张)，即可进行参考重绘。<br>
                     ❖ <b>混合</b>：例如 <code>/imago pro @用户 像素</code> (将用户头像转为像素风格)。
                 </div>
             </li>
