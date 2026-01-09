@@ -328,6 +328,10 @@ class ImageWorkflow:
         raw: bytes | None = None
         loop = asyncio.get_running_loop()
 
+        if not src:
+            return None
+        if src.startswith("file://"):
+            src = src.removeprefix("file://")
         if Path(src).is_file():
             raw = await loop.run_in_executor(None, Path(src).read_bytes)
         elif src.startswith("http"):
@@ -335,7 +339,8 @@ class ImageWorkflow:
         elif src.startswith("base64://"):
             raw = await loop.run_in_executor(None, base64.b64decode, src[9:])
 
-        if not raw: return None
+        if not raw:
+            return None
         return await loop.run_in_executor(None, self._extract_first_frame_sync, raw)
 
     async def extract_image_from_event(self, event: AstrMessageEvent) -> list[bytes]:
@@ -348,9 +353,14 @@ class ImageWorkflow:
         for seg in all_segments_to_check:
             if isinstance(seg, Comp.Image):
                 img_data = None
-                if seg.url: img_data = await self._load_bytes(seg.url)
-                elif seg.file: img_data = await self._load_bytes(seg.file)
-                if img_data: images.append(img_data)
+                if seg.url:
+                    img_data = await self._load_bytes(seg.url)
+                if not img_data and seg.file:
+                    img_data = await self._load_bytes(seg.file)
+                if not img_data and getattr(seg, "path", ""):
+                    img_data = await self._load_bytes(seg.path)
+                if img_data:
+                    images.append(img_data)
         return images
 
     async def terminate(self):
