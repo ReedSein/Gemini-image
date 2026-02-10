@@ -20,6 +20,141 @@
         "obvious_hint": true,
         "default": ""
     },
+    "api_backend_default": {
+        "description": "默认 API 后端",
+        "type": "string",
+        "hint": "可选：google/openai/zai/grok2api/doubao",
+        "default": "google",
+        "options": ["google", "openai", "zai", "grok2api", "doubao"]
+    },
+    "vertex_enabled": {
+        "description": "Google 后端是否启用 Vertex 模式",
+        "type": "bool",
+        "hint": "仅在当前后端为 google 时生效；关闭后使用 AI Studio API Key 模式。",
+        "default": true
+    },
+    "backend_settings": {
+        "description": "多后端配置",
+        "type": "object",
+        "items": {
+            "google": {
+                "description": "Google 后端配置",
+                "type": "object",
+                "items": {
+                    "model": {
+                        "description": "模型名（可选）",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_key": {
+                        "description": "Google API Key（可选，留空回退全局 api_key）",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_base": {
+                        "description": "Google API Base（可选）",
+                        "type": "string",
+                        "default": ""
+                    }
+                }
+            },
+            "openai": {
+                "description": "OpenAI 兼容后端配置",
+                "type": "object",
+                "items": {
+                    "model": {
+                        "description": "模型名",
+                        "type": "string",
+                        "default": "gemini-3-pro-image-preview"
+                    },
+                    "api_key": {
+                        "description": "OpenAI API Key",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_base": {
+                        "description": "OpenAI API Base",
+                        "type": "string",
+                        "default": "https://api.openai.com/v1"
+                    }
+                }
+            },
+            "zai": {
+                "description": "Zai 后端配置",
+                "type": "object",
+                "items": {
+                    "model": {
+                        "description": "模型名",
+                        "type": "string",
+                        "default": "gemini-3-pro-image-preview"
+                    },
+                    "api_key": {
+                        "description": "Zai API Key",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_base": {
+                        "description": "Zai API Base",
+                        "type": "string",
+                        "default": ""
+                    }
+                }
+            },
+            "grok2api": {
+                "description": "grok2api 后端配置",
+                "type": "object",
+                "items": {
+                    "model": {
+                        "description": "模型名",
+                        "type": "string",
+                        "default": "gemini-3-pro-image-preview"
+                    },
+                    "api_key": {
+                        "description": "grok2api API Key",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_base": {
+                        "description": "grok2api API Base",
+                        "type": "string",
+                        "default": ""
+                    }
+                }
+            },
+            "doubao": {
+                "description": "Doubao 后端配置",
+                "type": "object",
+                "items": {
+                    "endpoint_id": {
+                        "description": "模型/Endpoint ID",
+                        "type": "string",
+                        "default": "doubao-seedream-4-5-251128"
+                    },
+                    "api_key": {
+                        "description": "Doubao API Key",
+                        "type": "string",
+                        "default": ""
+                    },
+                    "api_base": {
+                        "description": "Doubao API Base",
+                        "type": "string",
+                        "default": "https://ark.cn-beijing.volces.com"
+                    },
+                    "default_size": {
+                        "description": "默认尺寸",
+                        "type": "string",
+                        "default": "2K",
+                        "options": ["2K", "4K"]
+                    },
+                    "watermark": {
+                        "description": "是否添加水印",
+                        "type": "bool",
+                        "default": false
+                    }
+                }
+            }
+        }
+    },
     "auth_json_path": {
         "description": "GCP 认证 JSON 文件路径 (可选)",
         "type": "string",
