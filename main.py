@@ -384,7 +384,6 @@ class GeminiDrawerPlugin(Star):
         
         self.proxy_enabled = bool(self.conf.get("proxy_enabled", True))
         self.proxy_url = self.conf.get("proxy_url", "")
-        self._proxy_env_enabled = False
         self.admin_id = self.conf.get("admin_id", "")
         self.generation_timeout = self.conf.get("generation_timeout_seconds", 90)
         self.incantation_fallback_reply = self.conf.get(
@@ -400,11 +399,9 @@ class GeminiDrawerPlugin(Star):
         self.enable_economy = self.eco_conf.get("enabled", True)
         self.points_file = self.plugin_data_dir / "user_points.json"
         self.user_points_data = {}
-        self._load_points_data()
         
         self.redeem_history_file = self.plugin_data_dir / "redeem_history.json"
         self.redeem_history = {}
-        self._load_redeem_data()
 
         # --- 配额配置 ---
         quota_conf = self.conf.get("quota", {})
@@ -442,7 +439,10 @@ class GeminiDrawerPlugin(Star):
         }
         self.default_rpm = 5
         self.usage_history = defaultdict(lambda: defaultdict(deque))
+        self.state_lock = asyncio.Lock()
         self.gen_lock = asyncio.Lock()
+        self.iwf: ImageWorkflow | None = None
+        self.client = None
         
         # --- 预设加载 (支持 \n 换行) ---
         self.presets = {}
@@ -461,23 +461,94 @@ class GeminiDrawerPlugin(Star):
             logger.warning("未检测到任何风格预设，请在配置中添加。")
 
 
-    def _apply_proxy_env(self):
-        if self.proxy_enabled and self.proxy_url:
-            os.environ["http_proxy"] = self.proxy_url
-            os.environ["https_proxy"] = self.proxy_url
-            self._proxy_env_enabled = True
-            return
-        self._clear_proxy_env()
+    def _build_http_options(self) -> types.HttpOptions | None:
+        if not (self.proxy_enabled and self.proxy_url):
+            return None
+        http_options = types.HttpOptions()
+        http_options.async_client_args = {"proxy": self.proxy_url}
+        return http_options
 
-    def _clear_proxy_env(self):
-        os.environ.pop("http_proxy", None)
-        os.environ.pop("https_proxy", None)
-        self._proxy_env_enabled = False
+    async def _read_json_file(
+        self,
+        path: Path,
+        default: dict,
+        label: str,
+    ) -> dict:
+        def read_json() -> dict:
+            if not path.exists():
+                return dict(default)
+            text = path.read_text(encoding="utf-8")
+            data = json.loads(text)
+            if isinstance(data, dict):
+                return data
+            logger.warning(f"{label} 文件格式异常，已回退默认值: {path}")
+            return dict(default)
+
+        try:
+            return await asyncio.to_thread(read_json)
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            TypeError,
+        ) as exc:
+            logger.warning(f"读取{label}失败，已回退默认值: {exc}")
+            return dict(default)
+
+    async def _write_json_file(self, path: Path, data: dict, label: str) -> None:
+        payload = json.dumps(data, indent=2, ensure_ascii=False)
+        try:
+            await asyncio.to_thread(path.write_text, payload, encoding="utf-8")
+        except OSError as exc:
+            logger.error(f"写入{label}失败: {exc}")
+
+    async def _load_points_data(self):
+        self.user_points_data = await self._read_json_file(
+            self.points_file,
+            default={},
+            label="积分数据",
+        )
+
+    async def _save_points_data(self):
+        await self._write_json_file(
+            self.points_file,
+            self.user_points_data,
+            label="积分数据",
+        )
+
+    async def _load_redeem_data(self):
+        self.redeem_history = await self._read_json_file(
+            self.redeem_history_file,
+            default={},
+            label="兑换历史",
+        )
+    
+    async def _save_redeem_data(self):
+        await self._write_json_file(
+            self.redeem_history_file,
+            self.redeem_history,
+            label="兑换历史",
+        )
+
+    async def _load_daily_quota_data(self) -> dict:
+        return await self._read_json_file(
+            self.daily_quota_file,
+            default={},
+            label="每日配额",
+        )
+
+    async def _save_daily_quota_data(self, data: dict) -> None:
+        await self._write_json_file(
+            self.daily_quota_file,
+            data,
+            label="每日配额",
+        )
 
     async def initialize(self):
         proxy_url = self.proxy_url if self.proxy_enabled else ""
         self.iwf = ImageWorkflow(proxy_url or None)
-        self._apply_proxy_env()
+        await self._load_points_data()
+        await self._load_redeem_data()
             
         final_auth_path = None
         if self.auth_json_path and Path(self.auth_json_path).is_file():
@@ -486,7 +557,11 @@ class GeminiDrawerPlugin(Star):
             try:
                 json.loads(self.vertex_auth_json) 
                 temp_auth_file = self.plugin_data_dir / "vertex_auth_temp.json"
-                temp_auth_file.write_text(self.vertex_auth_json, encoding='utf-8')
+                await asyncio.to_thread(
+                    temp_auth_file.write_text,
+                    self.vertex_auth_json,
+                    encoding="utf-8",
+                )
                 final_auth_path = str(temp_auth_file)
             except Exception as e:
                 logger.error(f"解析 vertex_auth_json 失败: {e}")
@@ -495,12 +570,22 @@ class GeminiDrawerPlugin(Star):
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = final_auth_path
         
         try:
+            http_options = self._build_http_options()
+            client_kwargs = {"http_options": http_options} if http_options else {}
             if self.vertex_project and self.vertex_location:
                 logger.info(f"初始化 Vertex AI Client (Project: {self.vertex_project})...")
-                self.client = genai.Client(vertexai=True, project=self.vertex_project, location=self.vertex_location)
+                self.client = genai.Client(
+                    vertexai=True,
+                    project=self.vertex_project,
+                    location=self.vertex_location,
+                    **client_kwargs,
+                )
             elif self.api_key:
                 logger.info("初始化 Google AI Studio Client (API Key)...")
-                self.client = genai.Client(api_key=self.api_key)
+                self.client = genai.Client(
+                    api_key=self.api_key,
+                    **client_kwargs,
+                )
             else:
                 logger.error("初始化失败：缺少认证信息。")
                 return
@@ -512,28 +597,6 @@ class GeminiDrawerPlugin(Star):
     # ==========================
     #      经济系统方法
     # ==========================
-    def _load_points_data(self):
-        if self.points_file.exists():
-            try:
-                self.user_points_data = json.loads(self.points_file.read_text(encoding='utf-8'))
-            except: self.user_points_data = {}
-
-    def _save_points_data(self):
-        try:
-            self.points_file.write_text(json.dumps(self.user_points_data, indent=2, ensure_ascii=False), encoding='utf-8')
-        except: pass
-
-    def _load_redeem_data(self):
-        if self.redeem_history_file.exists():
-            try:
-                self.redeem_history = json.loads(self.redeem_history_file.read_text(encoding='utf-8'))
-            except: self.redeem_history = {}
-    
-    def _save_redeem_data(self):
-        try:
-            self.redeem_history_file.write_text(json.dumps(self.redeem_history, indent=2, ensure_ascii=False), encoding='utf-8')
-        except: pass
-
     def _get_points(self, user_id: str) -> int:
         return self.user_points_data.get(str(user_id), {}).get("points", 0)
 
@@ -541,7 +604,6 @@ class GeminiDrawerPlugin(Star):
         uid = str(user_id)
         if uid not in self.user_points_data: self.user_points_data[uid] = {}
         self.user_points_data[uid]["points"] = self.user_points_data[uid].get("points", 0) + amount
-        self._save_points_data()
 
     def _deduct_points(self, user_id: str, amount: int) -> bool:
         uid = str(user_id)
@@ -551,7 +613,6 @@ class GeminiDrawerPlugin(Star):
         curr = self._get_points(uid)
         if curr >= amount:
             self.user_points_data[uid]["points"] = curr - amount
-            self._save_points_data()
             return True
         return False
     
@@ -569,7 +630,13 @@ class GeminiDrawerPlugin(Star):
     # ==========================
     #      配额管理方法
     # ==========================
-    def _check_quota(self, user_id: str, model_name: str) -> tuple[bool, float]:
+    def _check_quota(
+        self,
+        user_id: str,
+        model_name: str,
+        *,
+        consume: bool = True,
+    ) -> tuple[bool, float]:
         if self.admin_id and user_id == self.admin_id: return True, 0.0
         current_time = time.time()
         
@@ -593,17 +660,15 @@ class GeminiDrawerPlugin(Star):
         if len(user_history) >= limit:
             wait_seconds = window_size - (current_time - user_history[0])
             return False, max(1.0, round(wait_seconds, 1))
-            
-        user_history.append(current_time)
+        
+        if consume:
+            user_history.append(current_time)
         return True, 0.0
     
-    def _check_daily_limit(self, user_id: str, model_alias: str) -> tuple[bool, str]:
+    async def _check_daily_limit(self, user_id: str, model_alias: str) -> tuple[bool, str]:
         if self.admin_id and user_id == self.admin_id: return True, ""
 
-        data = {}
-        if self.daily_quota_file.exists():
-            try: data = json.loads(self.daily_quota_file.read_text(encoding='utf-8'))
-            except: pass
+        data = await self._load_daily_quota_data()
 
         today_str = datetime.now().strftime("%Y-%m-%d")
         user_data = data.get(user_id, {})
@@ -623,26 +688,23 @@ class GeminiDrawerPlugin(Star):
 
         return True, ""
 
-    def _increment_daily_usage(self, user_id: str, model_alias: str):
+    async def _increment_daily_usage(self, user_id: str, model_alias: str):
         if self.admin_id and user_id == self.admin_id: return
         
-        data = {}
-        if self.daily_quota_file.exists():
-            try: data = json.loads(self.daily_quota_file.read_text(encoding='utf-8'))
-            except: pass
+        data = await self._load_daily_quota_data()
             
         today_str = datetime.now().strftime("%Y-%m-%d")
         user_data = data.get(user_id, {"date": today_str, "usage": {}})
         if user_data.get("date") != today_str:
-             user_data = {"date": today_str, "usage": {}}
+            user_data = {"date": today_str, "usage": {}}
              
         current = user_data.get("usage", {}).get(model_alias, 0)
-        if "usage" not in user_data: user_data["usage"] = {}
+        if "usage" not in user_data:
+            user_data["usage"] = {}
         user_data["usage"][model_alias] = current + 1
         data[user_id] = user_data
         
-        try: self.daily_quota_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
-        except: pass
+        await self._save_daily_quota_data(data)
 
     # ==========================
     #        指令处理
@@ -680,23 +742,28 @@ class GeminiDrawerPlugin(Star):
             
         uid = str(event.get_sender_id())
         today = time.strftime("%Y-%m-%d")
-        
-        if uid not in self.user_points_data: self.user_points_data[uid] = {}
-        last = self.user_points_data[uid].get("last_checkin", "")
-        
-        if last == today:
-            yield event.plain_result(f"📅 今天已签到！\n当前积分: {self._get_points(uid)}")
-            return
+        reply_text = ""
 
-        min_r = self.eco_conf.get("checkin_min", 20)
-        max_r = self.eco_conf.get("checkin_max", 100)
-        reward = random.randint(min_r, max_r)
-        
-        self._add_points(uid, reward)
-        self.user_points_data[uid]["last_checkin"] = today
-        self._save_points_data()
-        
-        yield event.plain_result(f"🎉 签到成功 +{reward} 积分！\n当前余额: {self._get_points(uid)}")
+        async with self.state_lock:
+            if uid not in self.user_points_data:
+                self.user_points_data[uid] = {}
+            last = self.user_points_data[uid].get("last_checkin", "")
+
+            if last == today:
+                reply_text = f"📅 今天已签到！\n当前积分: {self._get_points(uid)}"
+            else:
+                min_r = self.eco_conf.get("checkin_min", 20)
+                max_r = self.eco_conf.get("checkin_max", 100)
+                reward = random.randint(min_r, max_r)
+
+                self._add_points(uid, reward)
+                self.user_points_data[uid]["last_checkin"] = today
+                await self._save_points_data()
+                reply_text = (
+                    f"🎉 签到成功 +{reward} 积分！\n当前余额: {self._get_points(uid)}"
+                )
+
+        yield event.plain_result(reply_text)
 
     @filter.command("积分")
     async def query_points(self, event: AstrMessageEvent):
@@ -724,26 +791,31 @@ class GeminiDrawerPlugin(Star):
                 c, amount = item.split(":", 1)
                 try:
                     valid_codes[c.strip()] = int(amount)
-                except: pass
+                except ValueError as exc:
+                    logger.warning(f"解析兑换码失败({item}): {exc}")
         
         if code not in valid_codes:
             yield event.plain_result("❌ 无效的兑换码。")
             return
-            
-        used_users = self.redeem_history.get(code, [])
-        if uid in used_users:
-            yield event.plain_result("❌ 您已经使用过这个兑换码了。")
-            return
-            
-        amount = valid_codes[code]
-        self._add_points(uid, amount)
-        
-        if code not in self.redeem_history:
-            self.redeem_history[code] = []
-        self.redeem_history[code].append(uid)
-        self._save_redeem_data()
-        
-        yield event.plain_result(f"🎉 兑换成功！获得 {amount} 积分。\n当前余额: {self._get_points(uid)}")
+
+        reply_text = ""
+        async with self.state_lock:
+            used_users = self.redeem_history.get(code, [])
+            if uid in used_users:
+                reply_text = "❌ 您已经使用过这个兑换码了。"
+            else:
+                amount = valid_codes[code]
+                self._add_points(uid, amount)
+                if code not in self.redeem_history:
+                    self.redeem_history[code] = []
+                self.redeem_history[code].append(uid)
+                await self._save_points_data()
+                await self._save_redeem_data()
+                reply_text = (
+                    f"🎉 兑换成功！获得 {amount} 积分。\n当前余额: {self._get_points(uid)}"
+                )
+
+        yield event.plain_result(reply_text)
 
     async def _handle_imago_like(self, event: AstrMessageEvent, image_size: str):
         incantation = bool(event.get_extra("incantation_command", False))
@@ -794,7 +866,7 @@ class GeminiDrawerPlugin(Star):
             return
             
         if not incantation:
-            is_daily_allowed, wait_time_str = self._check_daily_limit(
+            is_daily_allowed, wait_time_str = await self._check_daily_limit(
                 quota_user_id,
                 target_model_alias,
             )
@@ -840,6 +912,32 @@ class GeminiDrawerPlugin(Star):
         await self.gen_lock.acquire()
         res = None
         try:
+            if not incantation:
+                is_daily_allowed, wait_time_str = await self._check_daily_limit(
+                    quota_user_id,
+                    target_model_alias,
+                )
+                if not is_daily_allowed:
+                    yield event.plain_result(
+                        f"你已超出当前模型({target_model_alias})的每日配额，请于 {wait_time_str} 后重试。"
+                    )
+                    return
+
+                is_allowed, wait_seconds = self._check_quota(
+                    quota_user_id,
+                    selected_model_name,
+                    consume=False,
+                )
+                if not is_allowed:
+                    yield event.plain_result(f"请求太快了！\n请在 {wait_seconds} 秒后重试")
+                    return
+
+                if self.enable_economy and cost > 0 and not self._check_balance(user_id, cost):
+                    yield event.plain_result(
+                        f"💸 积分不足！\n{target_model_alias} 模型需 {cost} 积分，当前余额 {self._get_points(user_id)}。\n请发送 /签到 或使用 /兑换码"
+                    )
+                    return
+
             # 超时保护，避免长时间占用队列
             res = await asyncio.wait_for(
                 self._generate_image_with_gemini(
@@ -864,8 +962,14 @@ class GeminiDrawerPlugin(Star):
         
         if isinstance(res, bytes):
             if self.enable_economy and cost > 0 and not incantation:
-                self._deduct_points(user_id, cost)
-            self._increment_daily_usage(quota_user_id, target_model_alias)
+                async with self.state_lock:
+                    if self._deduct_points(user_id, cost):
+                        await self._save_points_data()
+                    else:
+                        logger.warning(
+                            f"[GeminiDrawer] 扣费失败，跳过扣费: user={user_id}, cost={cost}",
+                        )
+            await self._increment_daily_usage(quota_user_id, target_model_alias)
             
             msg_chain = [Image.fromBytes(res)]
             if self.enable_economy and cost > 0:
@@ -888,7 +992,7 @@ class GeminiDrawerPlugin(Star):
             else:
                 yield event.plain_result(f"生成失败: {res}")
 
-    @filter.command("imago", aliases={"draw", "生成", "画图"})
+    @filter.command("imago", alias={"draw", "生成", "画图"})
     async def on_imago(self, event: AstrMessageEvent):
         async for item in self._handle_imago_like(event, image_size="2K"):
             yield item
@@ -1131,6 +1235,6 @@ class GeminiDrawerPlugin(Star):
         return stripped
 
     async def terminate(self):
-        if self.iwf: await self.iwf.terminate()
-        self.client = None # 释放 Client 引用
-        self._clear_proxy_env()
+        if self.iwf:
+            await self.iwf.terminate()
+        self.client = None  # 释放 Client 引用
