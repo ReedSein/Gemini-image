@@ -1659,6 +1659,7 @@ class GeminiDrawerPlugin(Star):
             is_allowed, wait_seconds = self._check_quota(
                 quota_user_id,
                 selected_model_name,
+                consume=False,
             )
             if not is_allowed:
                 yield event.plain_result(f"请求太快了！\n请在 {wait_seconds} 秒后重试")
@@ -1743,6 +1744,18 @@ class GeminiDrawerPlugin(Star):
                 self.gen_lock.release()
         
         if isinstance(res, bytes):
+            if not incantation:
+                consumed, _ = self._check_quota(
+                    quota_user_id,
+                    selected_model_name,
+                    consume=True,
+                )
+                if not consumed:
+                    logger.warning(
+                        "[GeminiDrawer] 记录频率配额失败: user=%s, model=%s",
+                        quota_user_id,
+                        selected_model_name,
+                    )
             if self.enable_economy and cost > 0 and not incantation:
                 async with self.state_lock:
                     if self._deduct_points(user_id, cost):
