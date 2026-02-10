@@ -1,14 +1,17 @@
 import asyncio
 import base64
+import importlib.util
 import io
+import json
+import random
 import os
 import re
 import time
-import json
-import random
 from collections import defaultdict, deque
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import aiohttp
 from PIL import Image as PILImage
@@ -384,6 +387,15 @@ class GeminiDrawerPlugin(Star):
         
         self.proxy_enabled = bool(self.conf.get("proxy_enabled", True))
         self.proxy_url = self.conf.get("proxy_url", "")
+        self._use_global_proxy_env = False
+        self._proxy_env_keys = (
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+        )
         self.admin_id = self.conf.get("admin_id", "")
         self.generation_timeout = self.conf.get("generation_timeout_seconds", 90)
         self.incantation_fallback_reply = self.conf.get(
@@ -461,8 +473,48 @@ class GeminiDrawerPlugin(Star):
             logger.warning("未检测到任何风格预设，请在配置中添加。")
 
 
+    def _should_use_global_proxy_env(self) -> bool:
+        if not (self.proxy_enabled and self.proxy_url):
+            return False
+
+        scheme = urlparse(self.proxy_url).scheme.lower()
+        if scheme.startswith("socks") and importlib.util.find_spec("socksio") is None:
+            logger.warning(
+                "[GeminiDrawer] 检测到 SOCKS 代理但未安装 socksio；"
+                "google-genai 初始化会创建 httpx.AsyncClient，"
+                "per-client 代理会在初始化阶段失败，改为作用域化全局代理。"
+            )
+            return True
+        return False
+
+    # 为什么必须保留全局代理兜底：
+    # google-genai 在初始化时会先创建 httpx.AsyncClient；当 proxy 是 SOCKS 且
+    # 运行环境没有 socksio 时，per-client 方案会在初始化阶段直接抛错，尚未进入请求逻辑。
+    # 因此这里仅在该受限场景下启用“作用域化全局代理”，并在 finally 中严格还原环境变量。
+    @contextmanager
+    def _proxy_env_scope(self, stage: str):
+        if not (self._use_global_proxy_env and self.proxy_enabled and self.proxy_url):
+            yield
+            return
+
+        original_env = {key: os.environ.get(key) for key in self._proxy_env_keys}
+        logger.info(f"[GeminiDrawer] 设置全局代理环境变量: {stage}")
+        for key in self._proxy_env_keys:
+            os.environ[key] = self.proxy_url
+        try:
+            yield
+        finally:
+            for key, value in original_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            logger.info(f"[GeminiDrawer] 清理全局代理环境变量: {stage}")
+
     def _build_http_options(self) -> types.HttpOptions | None:
         if not (self.proxy_enabled and self.proxy_url):
+            return None
+        if self._use_global_proxy_env:
             return None
         http_options = types.HttpOptions()
         http_options.async_client_args = {"proxy": self.proxy_url}
@@ -546,6 +598,7 @@ class GeminiDrawerPlugin(Star):
 
     async def initialize(self):
         proxy_url = self.proxy_url if self.proxy_enabled else ""
+        self._use_global_proxy_env = self._should_use_global_proxy_env()
         self.iwf = ImageWorkflow(proxy_url or None)
         await self._load_points_data()
         await self._load_redeem_data()
@@ -572,23 +625,24 @@ class GeminiDrawerPlugin(Star):
         try:
             http_options = self._build_http_options()
             client_kwargs = {"http_options": http_options} if http_options else {}
-            if self.vertex_project and self.vertex_location:
-                logger.info(f"初始化 Vertex AI Client (Project: {self.vertex_project})...")
-                self.client = genai.Client(
-                    vertexai=True,
-                    project=self.vertex_project,
-                    location=self.vertex_location,
-                    **client_kwargs,
-                )
-            elif self.api_key:
-                logger.info("初始化 Google AI Studio Client (API Key)...")
-                self.client = genai.Client(
-                    api_key=self.api_key,
-                    **client_kwargs,
-                )
-            else:
-                logger.error("初始化失败：缺少认证信息。")
-                return
+            with self._proxy_env_scope("initialize"):
+                if self.vertex_project and self.vertex_location:
+                    logger.info(f"初始化 Vertex AI Client (Project: {self.vertex_project})...")
+                    self.client = genai.Client(
+                        vertexai=True,
+                        project=self.vertex_project,
+                        location=self.vertex_location,
+                        **client_kwargs,
+                    )
+                elif self.api_key:
+                    logger.info("初始化 Google AI Studio Client (API Key)...")
+                    self.client = genai.Client(
+                        api_key=self.api_key,
+                        **client_kwargs,
+                    )
+                else:
+                    logger.error("初始化失败：缺少认证信息。")
+                    return
             self.is_initialized = True
             logger.info(f"Client initialized successfully.")
         except Exception as e:
@@ -1055,11 +1109,12 @@ class GeminiDrawerPlugin(Star):
 
         async def generation_operation():
             try:
-                response = await self.client.aio.models.generate_content(
-                    model=model_name,
-                    contents=[types.Content(role="user", parts=parts)],
-                    config=generate_content_config,
-                )
+                with self._proxy_env_scope("generate_content"):
+                    response = await self.client.aio.models.generate_content(
+                        model=model_name,
+                        contents=[types.Content(role="user", parts=parts)],
+                        config=generate_content_config,
+                    )
                 if not response or not response.candidates: return "空回复，可能被审查"
                 
                 if response.candidates:
