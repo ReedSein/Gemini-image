@@ -1822,9 +1822,16 @@ class GeminiDrawerPlugin(Star):
             parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
         parts.append(types.Part.from_text(text=final_prompt))
 
+        normalized_model_name = (model_name or "").strip().lower()
+        response_modalities = ["IMAGE"]
+        if normalized_model_name == "gemini-3-pro-image-preview":
+            # 官方文档示例中，Nano Banana Pro 使用 TEXT+IMAGE 组合。
+            # 仅返回 IMAGE 在部分账户/区域会触发 INVALID_ARGUMENT。
+            response_modalities = ["TEXT", "IMAGE"]
+
         config_kwargs = {
             "temperature": 1,
-            "response_modalities": ["IMAGE"],
+            "response_modalities": response_modalities,
             "safety_settings": [
                 types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"),
                 types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"),
@@ -1836,9 +1843,6 @@ class GeminiDrawerPlugin(Star):
         
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
-        
-        if "gemini-3" in model_name:
-            config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
         
         generate_content_config = types.GenerateContentConfig(**config_kwargs)
 
