@@ -718,10 +718,13 @@ class GeminiDrawerPlugin(Star):
         backend = self.active_backend
         backend_cfg = self._get_backend_settings(backend)
         if backend == "google":
+            normalized_alias = str(model_alias or "").strip().lower()
+            if normalized_alias in self.model_map:
+                return self.model_map[normalized_alias]
             configured = str(backend_cfg.get("model", "")).strip()
             if configured:
                 return configured
-            return self.model_map.get(model_alias, self.model_map["flash"])
+            return self.model_map["flash"]
         if backend == "doubao":
             endpoint = str(backend_cfg.get("endpoint_id", "")).strip()
             if endpoint:
