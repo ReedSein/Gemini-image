@@ -168,9 +168,26 @@
         "default": ""
     },
     "model_name": {
-        "description": "使用的默认模型 (Fallback)",
+        "description": "旧版默认模型 (兼容字段)",
         "type": "string",
+        "hint": "当 model_map.flash 未设置时，此值作为 flash 模型后备。",
         "default": "gemini-2.5-flash-image"
+    },
+    "model_map": {
+        "description": "imago 子命令模型映射",
+        "type": "object",
+        "items": {
+            "flash": {
+                "description": "flash 子命令模型名",
+                "type": "string",
+                "default": "gemini-2.5-flash-image"
+            },
+            "pro": {
+                "description": "pro 子命令模型名",
+                "type": "string",
+                "default": "gemini-3-pro-image-preview"
+            }
+        }
     },
     "system_instruction": {
         "description": "【核心】系统提示词 (System Instruction)",
