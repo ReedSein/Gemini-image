@@ -456,19 +456,35 @@ class GeminiDrawerPlugin(Star):
         self.vertex_location = self.conf.get("vertex_location")
         self.auth_json_path = self.conf.get("auth_json_path") 
         self.vertex_auth_json = self.conf.get("vertex_auth_json")
-        self.model_name = self.conf.get("model_name", "gemini-2.5-flash-image")
+        default_model_map = {
+            "flash": "gemini-2.5-flash-image",
+            "pro": "gemini-3-pro-image-preview",
+        }
+        self.model_name = (
+            str(self.conf.get("model_name", "")).strip()
+            or default_model_map["flash"]
+        )
         self.is_initialized = False
         self.api_runtime_state_file = self.plugin_data_dir / "api_runtime_state.json"
         self.http_session: aiohttp.ClientSession | None = None
         self._last_connectivity_detail = ""
+        raw_model_map = self.conf.get("model_map", {})
+        self.model_map = dict(default_model_map)
+        if isinstance(raw_model_map, dict):
+            for alias in ("flash", "pro"):
+                configured_model = str(raw_model_map.get(alias, "")).strip()
+                if configured_model:
+                    self.model_map[alias] = configured_model
 
+        # 兼容旧配置：若未配置 model_map.flash，则沿用 model_name 作为 flash 模型。
+        if (
+            not isinstance(raw_model_map, dict)
+            or not str(raw_model_map.get("flash", "")).strip()
+        ):
+            self.model_map["flash"] = self.model_name
         self.max_retries = 10
         self.retry_delay = 2
         
-        self.model_map = {
-            "flash": "gemini-2.5-flash-image",
-            "pro": "gemini-3-pro-image-preview"
-        }
 
         flash_rpm = self.rate_limit_conf.get("flash_rpm", 3)
         pro_cooldown = self.rate_limit_conf.get("pro_cooldown", 90)
